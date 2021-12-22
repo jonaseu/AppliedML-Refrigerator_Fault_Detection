@@ -1,10 +1,12 @@
-from matplotlib.pyplot import plot
+from matplotlib.pyplot import plot, Line2D,Rectangle,Text
 import pandas as pd
 import glob
 from dataclasses import dataclass
 import matplotlib.pylab as plt
 from statsmodels.graphics.tsaplots import plot_acf,acf
 from collections import Counter
+from scipy.fft import fft, fftfreq,fftshift
+import numpy as np
 import math
 import seaborn as sns
 import mplcursors
@@ -17,7 +19,7 @@ import os
 #===============================================================================================================
 
 INPUT_LOG_FILES_PATH = r'_Inputs/Refrigerator Logs'
-INPUT_LOG_FILES_PATH = r'_Inputs/Refrigerator Logs - Fake Samples'
+#INPUT_LOG_FILES_PATH = r'_Inputs/Refrigerator Logs - Fake Samples'
 
 OUTPUT_PATH = r'_Outputs/'
 OUTPUT_LOG_FILES_PATH = OUTPUT_PATH + r'/Pre Processed - Refrigerator Logs'
@@ -67,6 +69,9 @@ TEST_TIME_COLUMN_NAME = 'test time (s)'
 
 SECONDS_IN_HOUR = 3600
 
+number_of_active_cursors = 0
+active_cursors = []
+previous_cursor_time = 0
 #===============================================================================================================
 #CODE
 #===============================================================================================================
@@ -95,22 +100,43 @@ def Visualize_BoxAndHist(data,xlabel,title=''):
 
 def Visualize_SimpleTemperatureCharts(log,title=''):
     
-    plt.figure()
+    def onClickShowXDelta(event):
+        global number_of_active_cursors
+        global active_cursors
+        global previous_cursor_time
+        number_of_active_cursors = number_of_active_cursors + 1
+        if(number_of_active_cursors <= 2):
+            color = 'g'
+            if(number_of_active_cursors == 2):
+                color = 'r'
+                delta = event.xdata - previous_cursor_time
+                active_cursors.append(plt.text(previous_cursor_time, event.ydata, ' Δ {:.0f}m'.format(delta), fontsize = 16))
+            active_cursors.append(plt.axvline(event.xdata,linestyle='--',linewidth=2,color=color))
+            active_cursors.append(plt.text(event.xdata, event.inaxes.axes.get_ylim()[0], ' {:.0f}m'.format(event.xdata), fontsize = 6,color=color))
+            previous_cursor_time = event.xdata
+        else:
+            for cursor in active_cursors:
+                cursor.remove()
+            active_cursors = []
+            number_of_active_cursors = 0
+        plt.show()
+
+    fig = plt.figure()
     for col in EXPECTED_COLUMNS:
-        plt.plot(log[TEST_TIME_COLUMN_NAME],log[col],label=col)
+        plt.plot(log['test time (m)'],log[col],label=col, picker=True)
     
     plt.title(title)
     plt.legend(EXPECTED_COLUMNS)
-    plt.ylabel('Temperature')
-    plt.xlabel('Sample')
+    plt.ylabel('Temperature °C')
+    plt.xlabel(TEST_TIME_COLUMN_NAME)
     mplcursors.cursor(hover=True)
+    fig.canvas.callbacks.connect('button_release_event', onClickShowXDelta)
     plt.savefig(OUTPUT_FIGURES_PATH+title)
 
 
 def Visualize_ACFOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
     
     fig = plt.figure()
-    fig.tight_layout()
 
     number_of_rows = int((math.ceil(len(EXPECTED_COLUMNS)))/2)
     subplot_counter = 1
@@ -121,6 +147,34 @@ def Visualize_ACFOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
         subplot_counter += 1
     
     fig.suptitle(title)
+    fig.tight_layout()
+    plt.savefig(OUTPUT_FIGURES_PATH+title)
+
+def Visualize_FFTOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
+    
+    fig = plt.figure()
+
+    number_of_rows = int((math.ceil(len(EXPECTED_COLUMNS)))/2)
+    subplot_counter = 1
+    for col in EXPECTED_COLUMNS:
+        sub_plot = fig.add_subplot(number_of_rows,2,subplot_counter)
+        fft_y = fft(log[col].values)
+        fft_f = fftfreq(len(log[col]), log[TEST_TIME_COLUMN_NAME][1] - log[TEST_TIME_COLUMN_NAME][0] )
+        filtered_fft_y = []
+        filtered_fft_f = []
+        #Only Show positve Frequencies
+        for id,value in enumerate(fft_f):
+            if(value > 0 and 1/value/60 > 10):
+                filtered_fft_y.append(fft_y[id])
+                filtered_fft_f.append(fft_f[id])
+
+        plot( np.array(filtered_fft_f), np.abs(filtered_fft_y))
+        sub_plot.title.set_text('FFT - {}'.format(col))
+        subplot_counter += 1
+    
+    mplcursors.cursor(hover=True)
+    fig.suptitle(title)
+    fig.tight_layout()
     plt.savefig(OUTPUT_FIGURES_PATH+title)
 
 
@@ -161,9 +215,9 @@ def Visualize_CompletePreProcessedData(df_collection):
     
     fig_title = 'ACF Averaged of Temperatures'  
     print('Ploting '+fig_title+'...') 
-    fig.tight_layout()
     mplcursors.cursor(hover=True)
     fig.suptitle(fig_title)
+    fig.tight_layout()
     plt.savefig(OUTPUT_FIGURES_PATH+fig_title)
 
 
@@ -316,7 +370,7 @@ def Filter_Valid_Logs(df_collection):
 def Filter_Desired_Columns(df_collection):
     for df_key in df_collection:
         df = df_collection[df_key]
-        df_collection[df_key] = df[df.columns.intersection([TEST_TIME_COLUMN_NAME] + EXPECTED_COLUMNS)]
+        df_collection[df_key] = df[df.columns.intersection([TEST_TIME_COLUMN_NAME] + ['test time (m)'] + EXPECTED_COLUMNS)]
 
     return(df_collection)
 
@@ -403,8 +457,10 @@ def PreProcessInputLogs(inputLogsPathFolder):
                 log_collection[file_name].columns = [col.lower() for col in log_collection[file_name].columns]
                 #Insert a new column of time in seconds
                 log_time_in_s = [Get_Seconds_FromStringHMS(reading) for reading in log_collection[file_name]['test time'] ]
+                log_time_in_m = [round(time/60) for time in log_time_in_s]
                 log_collection[file_name].insert(1,TEST_TIME_COLUMN_NAME,log_time_in_s,True)
-            
+                log_collection[file_name].insert(1,'test time (m)',log_time_in_m,True)
+
             except:
                 if(file_name in log_collection):
                     del log_collection[file_name]
@@ -480,16 +536,18 @@ if __name__ == '__main__':
             file_name = file_path.replace(OUTPUT_LOG_FILES_PATH+'\\','') #Remove path from file name
             log_collection[file_name] = pd.read_csv(file_path)
 
-    Visualize_CompletePreProcessedData(log_collection)
+    #Visualize_CompletePreProcessedData(log_collection)
 
     #Plot some temperature charts just for clarity
-    TEMPERATURE_LOGS_TO_SHOW = 2   
+    TEMPERATURE_LOGS_TO_SHOW = 2 
     if(ENABLE_DEBUG_VISUALIZATIONS):
         for log_key in log_collection:
             if(TEMPERATURE_LOGS_TO_SHOW > 0):
                 log_title = log_key.replace(".csv",'')
                 Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_title)
                 Visualize_ACFOfDesiredColumns(log_collection[log_key],'ACF - ' + log_title)
+                Visualize_FFTOfDesiredColumns(log_collection[log_key],'FFT - ' + log_title)
+                plt.show()
                 TEMPERATURE_LOGS_TO_SHOW -= 1
 
         plt.show()
