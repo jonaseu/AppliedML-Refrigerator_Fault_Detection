@@ -1,11 +1,10 @@
 from matplotlib.pyplot import plot, Line2D,Rectangle,Text
 import pandas as pd
 import glob
-from dataclasses import dataclass
 import matplotlib.pylab as plt
 from statsmodels.graphics.tsaplots import plot_acf,acf
 from collections import Counter
-from scipy.fft import fft, fftfreq,fftshift
+from scipy.fft import fft, fftfreq
 import numpy as np
 import math
 import seaborn as sns
@@ -13,6 +12,7 @@ import mplcursors
 import statistics
 import sys
 import os
+from scipy import signal
 
 #===============================================================================================================
 #PARAMETERS
@@ -60,6 +60,8 @@ EXPECTED_COLUMNS =    [
 ]
 #Expected columns to be the WIN Data (information that comes from the actual product at test)
 EXPECTED_COLUMNS =   ['W RC Temp','W FC Temp','W FC Evap Temp','W Pantry Temp','W Ambient Temp','W Ambient RH']
+EXPECTED_COLUMNS =   ['W Pantry Temp']
+
 
 #===============================================================================================================
 #DEFINES
@@ -128,7 +130,7 @@ def Visualize_SimpleTemperatureCharts(log,title=''):
     plt.title(title)
     plt.legend(EXPECTED_COLUMNS)
     plt.ylabel('Temperature °C')
-    plt.xlabel(TEST_TIME_COLUMN_NAME)
+    plt.xlabel('Test Time (m)')
     mplcursors.cursor(hover=True)
     fig.canvas.callbacks.connect('button_release_event', onClickShowXDelta)
     plt.savefig(OUTPUT_FIGURES_PATH+title)
@@ -150,29 +152,65 @@ def Visualize_ACFOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
     fig.tight_layout()
     plt.savefig(OUTPUT_FIGURES_PATH+title)
 
+def Visualize_SpectogramOfDesiredColumns(log,title=''):
+
+    fig = plt.figure()
+    fig2 = plt.figure()
+    number_of_rows = int(math.ceil(len(EXPECTED_COLUMNS)/2))
+    subplot_counter = 1
+    for col in EXPECTED_COLUMNS:
+        sub_plot = fig.add_subplot(number_of_rows,2 if len(EXPECTED_COLUMNS) > 1 else 1,subplot_counter)
+        sub_plot2 = fig2.add_subplot(number_of_rows,2 if len(EXPECTED_COLUMNS) > 1 else 1,subplot_counter)
+        f, t, Sxx = signal.spectrogram(log[col], 1/50,nperseg=256,noverlap=256 - 1 )
+
+        #Filtering too low frequencies
+        f = f[5:]
+        Sxx = Sxx[5:]
+        print(len(t))
+
+        sub_plot.pcolormesh(t, f, Sxx)
+        sub_plot2.specgram(log[col], Fs=1/50)
+        sub_plot.title.set_text('Spectogram - {}'.format(col))
+        subplot_counter += 1
+    
+    mplcursors.cursor(hover=True)
+    fig.suptitle(title)
+    fig.tight_layout()
+    plt.savefig(OUTPUT_FIGURES_PATH+title)
+
+
+
 def Visualize_FFTOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
     
     fig = plt.figure()
-
-    number_of_rows = int((math.ceil(len(EXPECTED_COLUMNS)))/2)
+    fig_test = plt.figure()
+    number_of_rows = int(math.ceil(len(EXPECTED_COLUMNS)/2))
     subplot_counter = 1
     for col in EXPECTED_COLUMNS:
         sub_plot = fig.add_subplot(number_of_rows,2,subplot_counter)
+        sub_plot_test = fig_test.add_subplot(number_of_rows,2,subplot_counter)
         fft_y = fft(log[col].values)
         fft_f = fftfreq(len(log[col]), log[TEST_TIME_COLUMN_NAME][1] - log[TEST_TIME_COLUMN_NAME][0] )
         filtered_fft_y = []
         filtered_fft_f = []
         #Only Show positve Frequencies
         for id,value in enumerate(fft_f):
-            if(value > 0 and 1/value/60 > 10):
+            if(value > 0 and 1/value/60 > 10 and 1/value/60 < 60*12):
                 filtered_fft_y.append(fft_y[id])
                 filtered_fft_f.append(fft_f[id])
 
-        plot( np.array(filtered_fft_f), np.abs(filtered_fft_y))
+        sub_plot.plot( np.array(filtered_fft_f), np.abs(filtered_fft_y))
+        filtered_fft_f = [1/fft_f/60 for fft_f in filtered_fft_f]
+        sub_plot_test.plot( np.array(filtered_fft_f), np.abs(filtered_fft_y),marker='.')
+        #plt.yscale('log',base=2)
+        plt.xscale('log',base=2)
         sub_plot.title.set_text('FFT - {}'.format(col))
+        sub_plot_test.title.set_text('Test - {}'.format(col))
         subplot_counter += 1
     
     mplcursors.cursor(hover=True)
+    fig_test.suptitle('Test Fig')
+    fig_test.tight_layout()
     fig.suptitle(title)
     fig.tight_layout()
     plt.savefig(OUTPUT_FIGURES_PATH+title)
@@ -539,14 +577,15 @@ if __name__ == '__main__':
     #Visualize_CompletePreProcessedData(log_collection)
 
     #Plot some temperature charts just for clarity
-    TEMPERATURE_LOGS_TO_SHOW = 2 
+    TEMPERATURE_LOGS_TO_SHOW = 4 
     if(ENABLE_DEBUG_VISUALIZATIONS):
         for log_key in log_collection:
             if(TEMPERATURE_LOGS_TO_SHOW > 0):
                 log_title = log_key.replace(".csv",'')
                 Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_title)
-                Visualize_ACFOfDesiredColumns(log_collection[log_key],'ACF - ' + log_title)
-                Visualize_FFTOfDesiredColumns(log_collection[log_key],'FFT - ' + log_title)
+                #Visualize_ACFOfDesiredColumns(log_collection[log_key],'ACF - ' + log_title)
+                #Visualize_FFTOfDesiredColumns(log_collection[log_key],'FFT - ' + log_title)
+                Visualize_SpectogramOfDesiredColumns(log_collection[log_key],'Spectogram - ' + log_title)
                 plt.show()
                 TEMPERATURE_LOGS_TO_SHOW -= 1
 
