@@ -76,6 +76,8 @@ SECONDS_IN_HOUR = 3600
 number_of_active_cursors = 0
 active_cursors = []
 previous_cursor_time = 0
+
+fft_active_cursors = {}
 #===============================================================================================================
 #CODE
 #===============================================================================================================
@@ -114,7 +116,7 @@ def Visualize_SimpleTemperatureCharts(log,title=''):
             if(number_of_active_cursors == 2):
                 color = 'r'
                 delta = event.xdata - previous_cursor_time
-                active_cursors.append(plt.text(previous_cursor_time, event.ydata, ' T = {:.0f}m \n f = {:.2e}Hz'.format(delta,1/(delta*60)), fontsize = 16))
+                active_cursors.append(plt.text(previous_cursor_time, event.ydata, ' T = {:.0f}m \n f = {:.2e}Hz'.format(delta,1/(delta*60)), fontsize = 16,bbox = dict(facecolor = 'red', alpha = 0.5)))
             active_cursors.append(plt.axvline(event.xdata,linestyle='--',linewidth=2,color=color))
             active_cursors.append(plt.text(event.xdata, event.inaxes.axes.get_ylim()[0], ' {:.0f}m'.format(event.xdata), fontsize = 6,color=color))
             previous_cursor_time = event.xdata
@@ -214,6 +216,22 @@ def Visualize_FFTOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
     
     mplcursors.cursor(hover=True)
     fig.suptitle(title)
+    def onClickShowFrequency(event):
+        global fft_active_cursors
+        chart_pressed = event.inaxes
+        if chart_pressed in fft_active_cursors:
+            fft_active_cursors[chart_pressed][0].remove()
+            fft_active_cursors[chart_pressed][1].remove()
+            del fft_active_cursors[chart_pressed]
+        else:
+            fft_active_cursors[chart_pressed] = ['','']
+            fft_active_cursors[chart_pressed][0] = event.inaxes.text(0.5, 0.1,' T = {:.1f}m'.format(1/event.xdata/60),bbox = dict(facecolor = 'red', alpha = 0.5),
+                                                        horizontalalignment='center', verticalalignment='center', transform=event.inaxes.transAxes)
+            fft_active_cursors[chart_pressed][1] = event.inaxes.plot(event.xdata,event.ydata,'ro')[0]
+        plt.show()
+
+
+    fig.canvas.callbacks.connect('button_release_event', onClickShowFrequency)
     fig.tight_layout()
     plt.savefig(OUTPUT_FIGURES_PATH+title)
 
@@ -579,7 +597,7 @@ if __name__ == '__main__':
     #Visualize_CompletePreProcessedData(log_collection)
 
     #Plot some temperature charts just for clarity
-    TEMPERATURE_LOGS_TO_SHOW = 100 
+    TEMPERATURE_LOGS_TO_SHOW = 1 
     if(ENABLE_DEBUG_VISUALIZATIONS):
         for log_key in log_collection:
             if(TEMPERATURE_LOGS_TO_SHOW > 0):
