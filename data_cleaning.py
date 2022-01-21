@@ -14,58 +14,14 @@ import statistics
 import sys
 import os
 from scipy import signal
+import yaml
 
-#===============================================================================================================
-#PARAMETERS
-#===============================================================================================================
-
-INPUT_LOG_FILES_PATH = r'_Inputs/Refrigerator Logs'
-#INPUT_LOG_FILES_PATH = r'_Inputs/Refrigerator Logs - Fake Samples'
-
-OUTPUT_PATH = r'_Outputs/'
-OUTPUT_LOG_FILES_PATH = OUTPUT_PATH + r'/Pre Processed - Refrigerator Logs'
-OUTPUT_FIGURES_PATH = OUTPUT_PATH + r'/figures/'
-
-#What is the value on the log that represent an invalid reading, should be always -999 for RTS system
-INVALID_READING = -999
-#What is the minimal percentage of valid data shall be on the log, otherwisw it will be removed
-MINIMAL_ACCEPTABLE_VALID_READING_PERCENTAGE = 0.8
-#What is the minimal duration in hours that a log shall have
-MINIMAL_LOG_DURATION = 5 
-#What is the maximal duration in hours that a log shall have
-MAXIMUM_LOG_DURATION = 24*6
-#What is the minimal sample rate
-MAXIMAL_LOG_SAMPLE_INTERVAL = 60
-#What is the minimal sample rate
-MINIMAL_LOG_SAMPLE_INTERVAL = 0 #For now,this can be used in case we don't want logs that have sample every 10s and logs that have every 50s
 #Define if should plot all available plots or not
 ENABLE_DEBUG_VISUALIZATIONS = True
 #Choose if the temperatures shall be converted to °C or not
 TRANSFORM_FROM_F_TO_C = True
-#Number of lags to plot the Auto Correlation Function chart
-ACF_NUMBER_OF_LAGS = 90
 
-#What are the desired columns
-EXPECTED_COLUMNS =    [
-    'evaporator inlet',
-    # 'freezer top 1',
-    'freezer mid 2',
-    # 'freezer bottom 3', 
-    # 'freezer 4', 
-    # 'freezer 5', 
-    # 'cabinet top 1', 
-    'cabinet middle 2', 
-    # 'cabinet bottom 3', 
-    # 'crisper 1', 
-    'crisper 2'
-]
-#Expected columns to be the WIN Data (information that comes from the actual product at test)
-EXPECTED_COLUMNS =   ['W RC Temp','W FC Temp','W FC Evap Temp','W Pantry Temp','W Ambient Temp','W Ambient RH']
-EXPECTED_COLUMNS =   ['W RC Temp','W FC Temp','W FC Evap Temp','W Pantry Temp']
-
-MAXIMUM_FREQUENCY = 1/(60 * 5)  #5 minutes
-MININUM_FREQUENCY = 1/(60 * 60)  #60 minutes
-
+PARAMETERS = yaml.safe_load(open('Parameters.yaml','r'))
 #===============================================================================================================
 #DEFINES
 #===============================================================================================================
@@ -103,7 +59,7 @@ def Visualize_BoxAndHist(data,xlabel,title=''):
     f.canvas.set_window_title(title)
     mplcursors.cursor(hover=True)
     plt.plot()
-    plt.savefig(OUTPUT_FIGURES_PATH+title)
+    plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+title)
 
 def Visualize_SimpleTemperatureCharts(log,title=''):
     
@@ -137,10 +93,10 @@ def Visualize_SimpleTemperatureCharts(log,title=''):
     plt.ylabel('Temperature °C')
     plt.xlabel('Test Time (m)')
     fig.canvas.callbacks.connect('button_release_event', onClickShowXDelta)
-    plt.savefig(OUTPUT_FIGURES_PATH+title)
+    plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+title)
 
 
-def Visualize_CCFOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
+def Visualize_CCFOfDesiredColumns(log,title=''):
     
     def ccf(x, y, lag_max = 100):
 
@@ -166,7 +122,7 @@ def Visualize_CCFOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
         fig.suptitle(title + ' - {}'.format(col))
         fig.tight_layout()
 
-def Visualize_ACFOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
+def Visualize_ACFOfDesiredColumns(log,title='',lags=PARAMETERS['FEATURE_EXTRACTION']['ACF_NUMBER_OF_LAGS']):
     
     fig = plt.figure()
 
@@ -180,7 +136,7 @@ def Visualize_ACFOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
     
     fig.suptitle(title)
     fig.tight_layout()
-    plt.savefig(OUTPUT_FIGURES_PATH+title)
+    plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+title)
 
 def Visualize_SpectogramOfDesiredColumns(log,title=''):
 
@@ -197,7 +153,7 @@ def Visualize_SpectogramOfDesiredColumns(log,title=''):
         filtered_f = []
         filtered_Sxx = []
         for id,value in enumerate(f):
-            if(f[id] >= MININUM_FREQUENCY and f[id] <= MAXIMUM_FREQUENCY):
+            if(f[id] >= PARAMETERS['FEATURE_EXTRACTION']['MININUM_FREQUENCY'] and f[id] <= PARAMETERS['FEATURE_EXTRACTION']['MAXIMUM_FREQUENCY']):
                 filtered_f.append(f[id])
                 filtered_Sxx.append(Sxx[id])
         f = filtered_f
@@ -212,11 +168,11 @@ def Visualize_SpectogramOfDesiredColumns(log,title=''):
     mplcursors.cursor(hover=True)
     fig.suptitle(title)
     fig.tight_layout()
-    plt.savefig(OUTPUT_FIGURES_PATH+title)
+    plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+title)
 
 
 
-def Visualize_FFTOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
+def Visualize_FFTOfDesiredColumns(log,title=''):
     
     fig = plt.figure()
     number_of_rows = int(math.ceil(len(EXPECTED_COLUMNS)/2))
@@ -230,7 +186,7 @@ def Visualize_FFTOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
         filtered_fft_y = []
         filtered_fft_f = []
         for id,value in enumerate(fft_y):
-            if(fft_f[id] >= MININUM_FREQUENCY and fft_f[id] <= MAXIMUM_FREQUENCY):
+            if(fft_f[id] >= PARAMETERS['FEATURE_EXTRACTION']['MININUM_FREQUENCY'] and fft_f[id] <= PARAMETERS['FEATURE_EXTRACTION']['MAXIMUM_FREQUENCY']):
                 filtered_fft_y.append(fft_y[id])
                 filtered_fft_f.append(fft_f[id])
         fft_y = filtered_fft_y
@@ -260,7 +216,7 @@ def Visualize_FFTOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
 
     fig.canvas.callbacks.connect('button_release_event', onClickShowFrequency)
     fig.tight_layout()
-    plt.savefig(OUTPUT_FIGURES_PATH+title)
+    plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+title)
 
 
 def Visualize_CompletePreProcessedData(df_collection):
@@ -280,7 +236,7 @@ def Visualize_CompletePreProcessedData(df_collection):
         complete_df = complete_df.append(df, ignore_index=True)
 
         for col in EXPECTED_COLUMNS: 
-            columns_acfs[col].append( acf(df[col],nlags=ACF_NUMBER_OF_LAGS) )
+            columns_acfs[col].append( acf(df[col],nlags=PARAMETERS['FEATURE_EXTRACTION']['ACF_NUMBER_OF_LAGS']) )
         
         print('Percentage {:.2%}'.format(count/len(df_collection.keys())),end='\r' )
         count += 1
@@ -303,7 +259,7 @@ def Visualize_CompletePreProcessedData(df_collection):
     mplcursors.cursor(hover=True)
     fig.suptitle(fig_title)
     fig.tight_layout()
-    plt.savefig(OUTPUT_FIGURES_PATH+fig_title)
+    plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
 
 
     #Plot Correlation Matrix
@@ -312,7 +268,7 @@ def Visualize_CompletePreProcessedData(df_collection):
     print('Ploting '+fig_title+'...')
     sns.heatmap(complete_df.corr(), annot=True)
     plt.title(fig_title)
-    plt.savefig(OUTPUT_FIGURES_PATH+fig_title)
+    plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
     
     #Plot violin plot of temperatures
     fig_title = 'Violin Plot of Temperatures'
@@ -322,7 +278,7 @@ def Visualize_CompletePreProcessedData(df_collection):
     plt.ylabel('Temperature (°C)')
     plt.xlabel('Sensor')
     plt.title(fig_title)
-    plt.savefig(OUTPUT_FIGURES_PATH+fig_title)
+    plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
     
     plt.show()
 
@@ -364,8 +320,8 @@ def Filter_Logs_Not_According_To_Duration(df_collection):
             average_sample_rate = statistics.mean(interval_between_samples)
 
             #Remove logs that do not respect desired duration
-            if( (log_duration < MINIMAL_LOG_DURATION or log_duration > MAXIMUM_LOG_DURATION) or
-                (average_sample_rate < MINIMAL_LOG_SAMPLE_INTERVAL or average_sample_rate > MAXIMAL_LOG_SAMPLE_INTERVAL) ):
+            if( (log_duration < PARAMETERS['LOG_FILTERING']['MINIMAL_LOG_DURATION'] or log_duration > PARAMETERS['LOG_FILTERING']['MAXIMUM_LOG_DURATION']) or
+                (average_sample_rate < PARAMETERS['LOG_FILTERING']['MINIMAL_LOG_SAMPLE_INTERVAL'] or average_sample_rate > PARAMETERS['LOG_FILTERING']['MAXIMAL_LOG_SAMPLE_INTERVAL']) ):
                 logs_to_remove.append(df_key)
                 print('\t\t{} removed. Duration={:.2f},Average Sample Interval={:.2f}'.format(df_key,log_duration,average_sample_rate))
 
@@ -407,12 +363,12 @@ def Filter_Logs_Not_According_To_Expected_Columns(df_collection):
                         
             col_values = df[col_name].to_numpy()
             ocurrences_on_col = df[col_name].value_counts()
-            if(INVALID_READING in ocurrences_on_col):
-                number_invalid_readings = ocurrences_on_col[INVALID_READING] 
+            if(PARAMETERS['RTS_PARAMETERS']['INVALID_READING'] in ocurrences_on_col):
+                number_invalid_readings = ocurrences_on_col[PARAMETERS['RTS_PARAMETERS']['INVALID_READING']] 
                 percentage_valid_readings = (len(df.index) - number_invalid_readings) / (len(df.index))
 
                 if (col_name in EXPECTED_COLUMNS and
-                    percentage_valid_readings < MINIMAL_ACCEPTABLE_VALID_READING_PERCENTAGE):
+                    percentage_valid_readings < PARAMETERS['LOG_FILTERING']['MINIMAL_VALID_READING_PERCENTAGE']):
                     #If most column values are invalid and is in the expected columns, remove the log
                     logs_to_remove.append(df_key)
                     print('\t\t{} removed as it had invalid values for col \'{}\''.format(df_key,col_name))
@@ -436,12 +392,14 @@ def Filter_Logs_Not_According_To_Expected_Columns(df_collection):
         valid_column_occurences = pd.DataFrame( list(Counter(valid_column_occurences).items()) , columns = ['Column Name','Ocurrences'])
         valid_column_occurences.sort_values(by='Ocurrences', ascending=False,inplace=True)
         chart_valid_columns = valid_column_occurences.plot.barh(x='Column Name',y='Ocurrences')
-        chart_valid_columns.set(xlabel='Number of Valid Logs [{:.2%} different then {}](#)'.format(MINIMAL_ACCEPTABLE_VALID_READING_PERCENTAGE,INVALID_READING))
+        chart_valid_columns.set(xlabel='Number of Valid Logs [{:.2%} different then {}](#)'.format(
+                                                                                                    PARAMETERS['LOG_FILTERING']['MINIMAL_VALID_READING_PERCENTAGE'],
+                                                                                                    PARAMETERS['RTS_PARAMETERS']['INVALID_READING']))
         chart_valid_columns.set(ylabel='Column Labels')
         fig_title = 'Number of valid columns'
         plt.title(fig_title)
         mplcursors.cursor(hover=True)
-        plt.savefig(OUTPUT_FIGURES_PATH+fig_title)
+        plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
 
     return(valid_df_collection)
 
@@ -463,7 +421,7 @@ def Filter_Valid_Rows(df_collection):
     for df_key in df_collection:
         df = df_collection[df_key]
         #Remove rows that have invalid reading, as they very likely mean that RTS lost communication to the product under test
-        df_collection[df_key] = df[df[EXPECTED_COLUMNS[0]] != INVALID_READING]
+        df_collection[df_key] = df[df[EXPECTED_COLUMNS[0]] != PARAMETERS['RTS_PARAMETERS']['INVALID_READING']]
 
     return df_collection
 
@@ -507,7 +465,7 @@ def Visualize_Analysis_Of_C_vs_F_Temperature_Unit(df_collection):
         #Export the data to a CSV file to facilitate anaylisis
         expected_columns_mean_name = ['MEAN '+ col_name for col_name in EXPECTED_COLUMNS ]
         df_degree_c_or_f = pd.DataFrame(degree_c_or_f, columns=['Log Name','Temperature Unit','MIN VALUE','MAX VALUE',]+expected_columns_mean_name)
-        df_degree_c_or_f.to_csv(OUTPUT_PATH + '/Analysis of Degrees in C or F.csv')
+        df_degree_c_or_f.to_csv(PARAMETERS['PATHS']['OUTPUT_PATH'] + 'Analysis of Degrees in C or F.csv')
         
         if(ENABLE_DEBUG_VISUALIZATIONS):
             df_degree_c_or_f['Temperature Unit'].value_counts().sort_index().plot(kind='bar', rot=0, ylabel='count')
@@ -535,7 +493,7 @@ def PreProcessInputLogs(inputLogsPathFolder):
         
         #Import files from desired folder 
         for file_path in input_logs:
-            file_name = file_path.replace(INPUT_LOG_FILES_PATH+'\\','')
+            file_name = file_path.replace(PARAMETERS['PATHS']['INPUT_LOG_FILES_PATH']+'\\','')
             try:
                 log_collection[file_name] = pd.read_csv (file_path,header=1)
                 #Columns to lower to facilitate further analysis on checking integrity of columns
@@ -580,13 +538,13 @@ def PreProcessInputLogs(inputLogsPathFolder):
         for index, value in enumerate(values):
             plt.text(labels[index], value, str(value),va='bottom')
         plt.plot()
-        plt.savefig(OUTPUT_FIGURES_PATH+'Data Processing Evaluation')
+        plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+'Data Processing Evaluation')
         plt.show()
 
 
         #Export data to output folder
         for log_name in cleaned_log_collection:
-            cleaned_log_collection[log_name].to_csv(OUTPUT_LOG_FILES_PATH + '/Pre Processed - ' + log_name,index=False)
+            cleaned_log_collection[log_name].to_csv(PARAMETERS['PATHS']['OUTPUT_LOG_FILES_PATH'] + '/Pre Processed - ' + log_name,index=False)
     else:
         print("No .csv logs on input folder, please check \'{}\'".format(inputLogsPathFolder))
 
@@ -598,27 +556,28 @@ def Remove_Files_From_Path(path):
     if(len(logs_on_output_folder) > 0):
         for log_path in logs_on_output_folder:
             os.remove(log_path)
-        print("Cleaned output folder")
+        print("Cleaned output folder" + path)
 
 
 if __name__ == '__main__':
+    EXPECTED_COLUMNS = PARAMETERS['LOG_FILTERING']['EXPECTED_COLUMNS']
     EXPECTED_COLUMNS = [col.lower() for col in EXPECTED_COLUMNS]
-
+    
     #Check if Clean parameter received, if yes, then clean Pre Processed folder
-    Remove_Files_From_Path(OUTPUT_FIGURES_PATH)
+    Remove_Files_From_Path(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH'])
     if( len(sys.argv) == 2 and sys.argv[1].lower() == 'true'):
-        Remove_Files_From_Path(OUTPUT_LOG_FILES_PATH)
+        Remove_Files_From_Path(PARAMETERS['PATHS']['OUTPUT_LOG_FILES_PATH'])
 
     #Get Pre Processed logs or recreate them
     log_collection = {}
-    logs_on_output_folder = glob.glob(OUTPUT_LOG_FILES_PATH + "\*.csv")
+    logs_on_output_folder = glob.glob(PARAMETERS['PATHS']['OUTPUT_LOG_FILES_PATH'] + "\*.csv")
     if(len(logs_on_output_folder) == 0):
         print("No Pre Processed logs, recreating them")
-        log_collection = PreProcessInputLogs(INPUT_LOG_FILES_PATH)
+        log_collection = PreProcessInputLogs(PARAMETERS['PATHS']['INPUT_LOG_FILES_PATH'])
     else:
         print("Pre Processed logs recovered")
         for file_path in logs_on_output_folder:
-            file_name = file_path.replace(OUTPUT_LOG_FILES_PATH+'\\','') #Remove path from file name
+            file_name = file_path.replace(PARAMETERS['PATHS']['OUTPUT_LOG_FILES_PATH']+'\\','') #Remove path from file name
             log_collection[file_name] = pd.read_csv(file_path)
 
     #Visualize_CompletePreProcessedData(log_collection)

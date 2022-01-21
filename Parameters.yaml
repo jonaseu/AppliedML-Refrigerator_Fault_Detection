@@ -1,0 +1,41 @@
+PATHS:
+    INPUT_LOG_FILES_PATH : '_Inputs/Refrigerator Logs'
+    OUTPUT_PATH : '_Outputs/'
+    OUTPUT_LOG_FILES_PATH : '_Outputs/Pre Processed - Refrigerator Logs'
+    OUTPUT_FIGURES_PATH : '_Outputs/figures/'
+
+RTS_PARAMETERS : 
+    #What is the value on the log that represent an invalid reading, should be always -999 for RTS system
+    INVALID_READING : -999
+
+
+LOG_FILTERING :
+    #What are the desired columns from the logs, if the log doesn't contain any of those, it will be removed
+    #EXPECTED_COLUMNS :   ['W RC Temp','W FC Temp','W FC Evap Temp','W Pantry Temp','W Ambient Temp','W Ambient RH']
+    EXPECTED_COLUMNS :   ['W RC Temp','W FC Temp','W FC Evap Temp','W Pantry Temp']
+
+    #What is the minimal percentage of valid data that shall be on the log, otherwise it will be removed
+    MINIMAL_VALID_READING_PERCENTAGE : 0.8
+
+    #What is the minimal duration in hours that a log shall have
+    MINIMAL_LOG_DURATION : 10 
+
+    #What is the maximal duration in hours that a log shall have
+    MAXIMUM_LOG_DURATION :  60
+
+    #What is the minimal sample rate
+    MAXIMAL_LOG_SAMPLE_INTERVAL : 60
+    
+    #What is the minimal sample rate
+    MINIMAL_LOG_SAMPLE_INTERVAL : 40
+
+
+FEATURE_EXTRACTION:
+    #Number of lags to plot the Auto Correlation Function chart
+    ACF_NUMBER_OF_LAGS : 90
+
+    #Maximum Frequency allowed for frequency related charts
+    MAXIMUM_FREQUENCY : 0.003334  #5 minutes
+
+    #Minimum Frequency allowed for frequency related charts
+    MININUM_FREQUENCY : 0.00027781  #60 minutes
