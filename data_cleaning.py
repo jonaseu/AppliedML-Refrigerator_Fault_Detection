@@ -3,6 +3,7 @@ import pandas as pd
 import glob
 import matplotlib.pylab as plt
 from statsmodels.graphics.tsaplots import plot_acf,acf
+import scipy.signal as ss
 from collections import Counter
 from scipy.fft import fft, fftfreq
 import numpy as np
@@ -138,6 +139,32 @@ def Visualize_SimpleTemperatureCharts(log,title=''):
     fig.canvas.callbacks.connect('button_release_event', onClickShowXDelta)
     plt.savefig(OUTPUT_FIGURES_PATH+title)
 
+
+def Visualize_CCFOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
+    
+    def ccf(x, y, lag_max = 100):
+
+        result = ss.correlate(y - np.mean(y), x - np.mean(x), method='direct') / (np.std(y) * np.std(x) * len(y))
+        length = (len(result) - 1) // 2
+        lo = length - lag_max
+        hi = length + (lag_max + 1)
+
+        return result[lo:hi]
+
+    number_of_rows = int(math.ceil((len(EXPECTED_COLUMNS) -1)/2 ))
+    for col in EXPECTED_COLUMNS:
+        fig = plt.figure()
+        subplot_counter = 1
+        for col_to_cor in EXPECTED_COLUMNS:
+            if(col_to_cor !=  col):
+                sub_plot = fig.add_subplot(number_of_rows,2,subplot_counter)
+                ccf_output = ccf(log[col],log[col_to_cor])
+                sub_plot.plot(ccf_output)
+                sub_plot.title.set_text('CCF - {}'.format(col_to_cor))
+            subplot_counter += 1
+
+        fig.suptitle(title + ' - {}'.format(col))
+        fig.tight_layout()
 
 def Visualize_ACFOfDesiredColumns(log,title='',lags=ACF_NUMBER_OF_LAGS):
     
@@ -597,13 +624,14 @@ if __name__ == '__main__':
     #Visualize_CompletePreProcessedData(log_collection)
 
     #Plot some temperature charts just for clarity
-    TEMPERATURE_LOGS_TO_SHOW = 1 
+    TEMPERATURE_LOGS_TO_SHOW = 5 
     if(ENABLE_DEBUG_VISUALIZATIONS):
         for log_key in log_collection:
             if(TEMPERATURE_LOGS_TO_SHOW > 0):
                 log_title = log_key.replace(".csv",'')
                 Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_title)
                 Visualize_ACFOfDesiredColumns(log_collection[log_key],'ACF - ' + log_title)
+                #Visualize_CCFOfDesiredColumns(log_collection[log_key],'CCF - ' + log_title)
                 Visualize_FFTOfDesiredColumns(log_collection[log_key],'FFT - ' + log_title)
                 Visualize_SpectogramOfDesiredColumns(log_collection[log_key],'Spectogram - ' + log_title)
                 plt.show()
