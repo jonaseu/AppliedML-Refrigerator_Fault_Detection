@@ -240,7 +240,7 @@ def Visualize_CompletePreProcessedData(df_collection):
         
         print('Percentage {:.2%}'.format(count/len(df_collection.keys())),end='\r' )
         count += 1
-    
+
     #Plot the ACF avereaged for each column
     number_of_rows = int((math.ceil(len(EXPECTED_COLUMNS)))/2)
     fig = plt.figure()
@@ -254,6 +254,8 @@ def Visualize_CompletePreProcessedData(df_collection):
         sub_plot.title.set_text('ACF AVERAGED - {}'.format(col))
         subplot_counter += 1
     
+    Visualize_FFTOfDesiredColumns(complete_df,'FFT - Amplitude x Freq (Hz) - Complete Dataset')
+
     fig_title = 'ACF Averaged of Temperatures'  
     print('Ploting '+fig_title+'...') 
     mplcursors.cursor(hover=True)
@@ -261,9 +263,8 @@ def Visualize_CompletePreProcessedData(df_collection):
     fig.tight_layout()
     plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
 
-
     #Plot Correlation Matrix
-    fig_title = 'Correlation Matrix of Temperatures'
+    fig_title = 'Correlation Matrix of Temperatures - Complete Dataset'
     plt.figure()
     print('Ploting '+fig_title+'...')
     sns.heatmap(complete_df.corr(), annot=True)
@@ -271,7 +272,7 @@ def Visualize_CompletePreProcessedData(df_collection):
     plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
     
     #Plot violin plot of temperatures
-    fig_title = 'Violin Plot of Temperatures'
+    fig_title = 'Violin Plot of Temperatures - Complete Dataset'
     plt.figure()
     print('Ploting '+fig_title+'...')
     sns.violinplot(data=complete_df[EXPECTED_COLUMNS])
@@ -280,7 +281,7 @@ def Visualize_CompletePreProcessedData(df_collection):
     plt.title(fig_title)
     plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
     
-    plt.show()
+    # plt.show()
 
 
 def Visualize_Logs_Duration_And_Sample_Rate(df_collection,title=''):
@@ -580,19 +581,19 @@ if __name__ == '__main__':
             file_name = file_path.replace(PARAMETERS['PATHS']['OUTPUT_LOG_FILES_PATH']+'\\','') #Remove path from file name
             log_collection[file_name] = pd.read_csv(file_path)
 
-    #Visualize_CompletePreProcessedData(log_collection)
+    Visualize_CompletePreProcessedData(log_collection)
 
     #Plot some temperature charts just for clarity
-    TEMPERATURE_LOGS_TO_SHOW = 5 
+    TEMPERATURE_LOGS_TO_SHOW = 1 
     if(ENABLE_DEBUG_VISUALIZATIONS):
         for log_key in log_collection:
             if(TEMPERATURE_LOGS_TO_SHOW > 0):
                 log_title = log_key.replace(".csv",'')
                 Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_title)
                 Visualize_ACFOfDesiredColumns(log_collection[log_key],'ACF - ' + log_title)
-                #Visualize_CCFOfDesiredColumns(log_collection[log_key],'CCF - ' + log_title)
-                Visualize_FFTOfDesiredColumns(log_collection[log_key],'FFT - ' + log_title)
-                Visualize_SpectogramOfDesiredColumns(log_collection[log_key],'Spectogram - ' + log_title)
+                #Visualize_CCFOfDesiredColumns(log_collection[log_key],'CCF - ' + log_title) #CCF is not showing a clear correlation, removing it for now
+                Visualize_FFTOfDesiredColumns(log_collection[log_key],'FFT - Amplitude x Freq (Hz) - ' + log_title)
+                Visualize_SpectogramOfDesiredColumns(log_collection[log_key],'Spectogram - Freq (Hz) x Log Time (m) - ' + log_title)
                 plt.show()
                 TEMPERATURE_LOGS_TO_SHOW -= 1
 
