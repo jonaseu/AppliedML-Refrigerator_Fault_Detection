@@ -228,18 +228,35 @@ def Visualize_CompletePreProcessedData(df_collection):
     columns_acf_average = {key:[] for key in EXPECTED_COLUMNS}
 
     #Creates a complete df with data from all logs and also get acf for each log
-    print("Starting Complete Logging")
+    summarized_dataset = {}
+    print("Starting Summary of the complete Pre Processed Data")
     count = 1
     for df_key in df_collection:
         df = df_collection[df_key]
         df = df.loc[df['test time (s)'] >= IGNORE_PERIOD]
         complete_df = complete_df.append(df, ignore_index=True)
 
+        summarized_dataset[df_key]  = []
+
         for col in EXPECTED_COLUMNS: 
             columns_acfs[col].append( acf(df[col],nlags=PARAMETERS['FEATURE_EXTRACTION']['ACF_NUMBER_OF_LAGS']) )
+            
+            column_statistics = df[col].describe()
+            for value in column_statistics:
+                summarized_dataset[df_key].append(value)
         
         print('Percentage {:.2%}'.format(count/len(df_collection.keys())),end='\r' )
         count += 1
+
+    summarized_column_names = []
+    summarized_dataset['TOTAL'] = []
+    for col in EXPECTED_COLUMNS: 
+        column_statistics = complete_df[col].describe()
+        for key,value in enumerate(column_statistics):
+            summarized_column_names.append(col + '_' + column_statistics.index[key])
+            summarized_dataset['TOTAL'].append(value)
+
+    pd.DataFrame.from_dict(summarized_dataset,orient='index',columns=summarized_column_names).to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Pre Processed - Summarized Dataset.csv')
 
     #Plot the ACF avereaged for each column
     number_of_rows = int((math.ceil(len(EXPECTED_COLUMNS)))/2)
@@ -254,7 +271,9 @@ def Visualize_CompletePreProcessedData(df_collection):
         sub_plot.title.set_text('ACF AVERAGED - {}'.format(col))
         subplot_counter += 1
     
-    Visualize_FFTOfDesiredColumns(complete_df,'FFT - Amplitude x Freq (Hz) - Complete Dataset')
+    fig_title = 'FFT - Amplitude x Freq (Hz) - Complete Dataset'
+    print('Ploting '+fig_title+'...') 
+    Visualize_FFTOfDesiredColumns(complete_df,fig_title)
 
     fig_title = 'ACF Averaged of Temperatures'  
     print('Ploting '+fig_title+'...') 
@@ -281,7 +300,7 @@ def Visualize_CompletePreProcessedData(df_collection):
     plt.title(fig_title)
     plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
     
-    # plt.show()
+    plt.show()
 
 
 def Visualize_Logs_Duration_And_Sample_Rate(df_collection,title=''):
