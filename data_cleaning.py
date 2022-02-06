@@ -323,6 +323,14 @@ def Visualize_Logs_Duration_And_Sample_Rate(df_collection,title=''):
     Visualize_BoxAndHist(logs_duration,'Logs Duration (h)',title + '- Logs Duration')
     Visualize_BoxAndHist(logs_sample_rate,'Average Sample Interval (s)',title + '- Logs Sample Rate')
 
+def Visualize__AllLogCharts(log,log_title):
+    Visualize_SimpleTemperatureCharts(log,'Temperature Chart - '+ log_title)
+    Visualize_ACFOfDesiredColumns(log,'ACF - ' + log_title)
+    #Visualize_CCFOfDesiredColumns(log,'CCF - ' + log_title) #CCF is not showing a clear correlation, removing it for now
+    Visualize_FFTOfDesiredColumns(log,'FFT - Amplitude x Freq (Hz) - ' + log_title)
+    Visualize_SpectogramOfDesiredColumns(log,'Spectogram - Freq (Hz) x Log Time (m) - ' + log_title)
+    plt.show()
+
 def Filter_Logs_Not_According_To_Duration(df_collection):
 
     valid_df_collection = df_collection.copy()
@@ -600,20 +608,23 @@ if __name__ == '__main__':
             file_name = file_path.replace(PARAMETERS['PATHS']['OUTPUT_LOG_FILES_PATH']+'\\','') #Remove path from file name
             log_collection[file_name] = pd.read_csv(file_path)
 
-    Visualize_CompletePreProcessedData(log_collection)
+    # Visualize_CompletePreProcessedData(log_collection)
 
-    #Plot some temperature charts just for clarity
-    TEMPERATURE_LOGS_TO_SHOW = 1 
-    if(ENABLE_DEBUG_VISUALIZATIONS):
-        for log_key in log_collection:
-            if(TEMPERATURE_LOGS_TO_SHOW > 0):
-                log_title = log_key.replace(".csv",'')
-                Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_title)
-                Visualize_ACFOfDesiredColumns(log_collection[log_key],'ACF - ' + log_title)
-                #Visualize_CCFOfDesiredColumns(log_collection[log_key],'CCF - ' + log_title) #CCF is not showing a clear correlation, removing it for now
-                Visualize_FFTOfDesiredColumns(log_collection[log_key],'FFT - Amplitude x Freq (Hz) - ' + log_title)
-                Visualize_SpectogramOfDesiredColumns(log_collection[log_key],'Spectogram - Freq (Hz) x Log Time (m) - ' + log_title)
-                plt.show()
-                TEMPERATURE_LOGS_TO_SHOW -= 1
+    #Plot some temperature charts for clarity according to what is defined on parameters yaml
+    desired_logs = PARAMETERS['LOGS_TO_PLOT']
+    logs_to_plot = []
+    if(type(desired_logs) is str):
+        if(desired_logs == 'ALL'):
+            desired_logs = log_collection.keys()
+        else:
+            desired_logs = [PARAMETERS['LOGS_TO_PLOT']]
 
+    for log_key in log_collection:   
+        for desired_log in desired_logs:
+            if(desired_log in log_key):
+                logs_to_plot.append(log_key)
+
+    for log_key in logs_to_plot:
+        log_title = log_key.replace(".csv",'')
+        Visualize__AllLogCharts(log_collection[log_key],log_title)
         plt.show()

@@ -8,6 +8,8 @@ RTS_PARAMETERS :
     #What is the value on the log that represent an invalid reading, should be always -999 for RTS system
     INVALID_READING : -999
 
+#List of of the test IDs to plot multiple visualizations or 'ALL' if all input tests want to be plotted
+LOGS_TO_PLOT: 'ALL'
 
 LOG_FILTERING :
     #What are the desired columns from the logs, if the log doesn't contain any of those, it will be removed
