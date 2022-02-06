@@ -91,6 +91,7 @@ def Visualize_SimpleTemperatureCharts(log,title=''):
     plt.title(title)
     plt.legend(EXPECTED_COLUMNS)
     plt.ylabel('Temperature °C')
+    plt.ylim([-40,40])
     plt.xlabel('Test Time (m)')
     fig.canvas.callbacks.connect('button_release_event', onClickShowXDelta)
     plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+title)
@@ -329,7 +330,6 @@ def Visualize__AllLogCharts(log,log_title):
     #Visualize_CCFOfDesiredColumns(log,'CCF - ' + log_title) #CCF is not showing a clear correlation, removing it for now
     Visualize_FFTOfDesiredColumns(log,'FFT - Amplitude x Freq (Hz) - ' + log_title)
     Visualize_SpectogramOfDesiredColumns(log,'Spectogram - Freq (Hz) x Log Time (m) - ' + log_title)
-    plt.show()
 
 def Filter_Logs_Not_According_To_Duration(df_collection):
 
@@ -611,13 +611,13 @@ if __name__ == '__main__':
     # Visualize_CompletePreProcessedData(log_collection)
 
     #Plot some temperature charts for clarity according to what is defined on parameters yaml
-    desired_logs = PARAMETERS['LOGS_TO_PLOT']
+    desired_logs = PARAMETERS['PLOTS']['LOGS_TO_PLOT']
     logs_to_plot = []
     if(type(desired_logs) is str):
         if(desired_logs == 'ALL'):
             desired_logs = log_collection.keys()
         else:
-            desired_logs = [PARAMETERS['LOGS_TO_PLOT']]
+            desired_logs = [desired_logs]
 
     for log_key in log_collection:   
         for desired_log in desired_logs:
@@ -627,4 +627,7 @@ if __name__ == '__main__':
     for log_key in logs_to_plot:
         log_title = log_key.replace(".csv",'')
         Visualize__AllLogCharts(log_collection[log_key],log_title)
-        plt.show()
+        if(PARAMETERS['PLOTS']['PLOT_LOGS_INDIVIDUALLY'] == True):
+            plt.show()
+
+    plt.show()
