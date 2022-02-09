@@ -44,3 +44,7 @@ FEATURE_EXTRACTION:
 
     #Minimum Frequency allowed for frequency related charts
     MININUM_FREQUENCY : 0.00027781  #60 minutes
+
+    #The number of frequency bins for the FFT
+    #This will result in NUMBER_FREQUENCY_BINS * EXPECTED_COLUMNS new features for the model
+    NUMBER_FREQUENCY_BINS : 20

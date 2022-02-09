@@ -230,6 +230,7 @@ def Visualize_CompletePreProcessedData(df_collection):
 
     #Creates a complete df with data from all logs and also get acf for each log
     summarized_dataset = {}
+    feq_bins = np.linspace(PARAMETERS['FEATURE_EXTRACTION']['MININUM_FREQUENCY'], PARAMETERS['FEATURE_EXTRACTION']['MAXIMUM_FREQUENCY'], num=PARAMETERS['FEATURE_EXTRACTION']['NUMBER_FREQUENCY_BINS']+1)
     print("Starting Summary of the complete Pre Processed Data")
     count = 1
     for df_key in df_collection:
@@ -245,7 +246,34 @@ def Visualize_CompletePreProcessedData(df_collection):
             column_statistics = df[col].describe()
             for value in column_statistics:
                 summarized_dataset[df_key].append(value)
+
+        Visualize_SimpleTemperatureCharts(df,'Temperature Chart - '+ df_key.replace(".csv",''))
+        Visualize_FFTOfDesiredColumns(df,'FFT - Amplitude x Freq (Hz) - ' + df_key.replace(".csv",''))
         
+        #Creates FFT for each column and put its into bins averaging then
+        fig = plt.figure()
+        number_of_rows = int(math.ceil(len(EXPECTED_COLUMNS)/2))
+        subplot_counter = 1
+        for col in EXPECTED_COLUMNS:
+            log_fft = {}
+            log_fft['amplitude'] = np.abs(fft(df[col].values))
+            log_fft['frequency'] = fftfreq(len(df[col]), df[TEST_TIME_COLUMN_NAME][1] - df[TEST_TIME_COLUMN_NAME][0] )
+            log_fft = pd.DataFrame(log_fft)
+            log_fft['frequency_bin'] = pd.cut( log_fft['frequency'], feq_bins, include_lowest=True)
+            averaged_bins = log_fft.groupby('frequency_bin').mean()
+            #Append to the summarized dataset the binned aplitudes of the FFT
+            summarized_dataset[df_key].extend(averaged_bins['amplitude'].tolist())
+                    
+            sub_plot = fig.add_subplot(number_of_rows,2,subplot_counter)
+            bins_frequencies = [x.right for x in averaged_bins.index]
+            sub_plot.step(bins_frequencies,averaged_bins['amplitude'])
+
+            sub_plot.title.set_text('Binned FFT - {}'.format(col))
+            subplot_counter += 1
+
+        if(count > 10):
+            break
+
         print('Percentage {:.2%}'.format(count/len(df_collection.keys())),end='\r' )
         count += 1
 
@@ -256,6 +284,9 @@ def Visualize_CompletePreProcessedData(df_collection):
         for key,value in enumerate(column_statistics):
             summarized_column_names.append(col + '_' + column_statistics.index[key])
             summarized_dataset['TOTAL'].append(value)
+        for bin_interval in averaged_bins.index:
+            summarized_column_names.append('Hz_{}_{:.2E}_to_{:.2E}'.format(col,bin_interval.left,bin_interval.right) )
+
 
     pd.DataFrame.from_dict(summarized_dataset,orient='index',columns=summarized_column_names).to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Pre Processed - Summarized Dataset.csv')
 
@@ -608,7 +639,7 @@ if __name__ == '__main__':
             file_name = file_path.replace(PARAMETERS['PATHS']['OUTPUT_LOG_FILES_PATH']+'\\','') #Remove path from file name
             log_collection[file_name] = pd.read_csv(file_path)
 
-    # Visualize_CompletePreProcessedData(log_collection)
+    Visualize_CompletePreProcessedData(log_collection)
 
     #Plot some temperature charts for clarity according to what is defined on parameters yaml
     desired_logs = PARAMETERS['PLOTS']['LOGS_TO_PLOT']
@@ -624,6 +655,7 @@ if __name__ == '__main__':
             if(desired_log in log_key):
                 logs_to_plot.append(log_key)
 
+    #For each of the desired logs, plot them
     for log_key in logs_to_plot:
         log_title = log_key.replace(".csv",'')
         Visualize__AllLogCharts(log_collection[log_key],log_title)
