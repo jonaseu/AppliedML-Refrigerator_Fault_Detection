@@ -88,6 +88,15 @@ def Visualize_SimpleTemperatureCharts(log,title=''):
     for col in EXPECTED_COLUMNS:
         plt.plot(log['test time (m)'],log[col],label=col, picker=True)
     
+    if(PARAMETERS['PLOTS']['SETPOINT_RANGES']['ALLOW_SETPOINT_PLOT'] == True):
+        #RC
+        plt.axhspan(-2.25, 8.55, color='blue', alpha=0.3)
+        #FC
+        plt.axhspan(-27, -14.8, color = 'orange', alpha=0.3)
+        #Pantry
+        plt.axhspan(0.5, 3.5, color = 'red', alpha=0.3)
+
+
     plt.title(title)
     plt.legend(EXPECTED_COLUMNS)
     plt.ylabel('Temperature °C')
@@ -639,7 +648,7 @@ if __name__ == '__main__':
             file_name = file_path.replace(PARAMETERS['PATHS']['OUTPUT_LOG_FILES_PATH']+'\\','') #Remove path from file name
             log_collection[file_name] = pd.read_csv(file_path)
 
-    Visualize_CompletePreProcessedData(log_collection)
+    #Visualize_CompletePreProcessedData(log_collection)
 
     #Plot some temperature charts for clarity according to what is defined on parameters yaml
     desired_logs = PARAMETERS['PLOTS']['LOGS_TO_PLOT']
@@ -654,12 +663,25 @@ if __name__ == '__main__':
         for desired_log in desired_logs:
             if(desired_log in log_key):
                 logs_to_plot.append(log_key)
+                
+    # #For each of the desired logs, plot them
+    # manual_classification = {}
+    # #count = 1
+    # for log_key in logs_to_plot:
+    #     log_title = log_key.replace(".csv",'')
+    #     Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_title)
+    #     #Visualize__AllLogCharts(log_collection[log_key],log_title)
+    #     if(PARAMETERS['PLOTS']['PLOT_LOGS_INDIVIDUALLY'] == True):
+    #         plt.show(block=False)
+    #     #manual_classification[log_title] = input("{}, ".format(log_title))
+    #     #plt.close()
+    #     #test = pd.DataFrame.from_dict(manual_classification, orient='index').to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv')    
+    #     #print("{}/{}".format(count,len(logs_to_plot)))
+    #     #count += 1
+    # plt.show()
 
-    #For each of the desired logs, plot them
-    for log_key in logs_to_plot:
-        log_title = log_key.replace(".csv",'')
-        Visualize__AllLogCharts(log_collection[log_key],log_title)
-        if(PARAMETERS['PLOTS']['PLOT_LOGS_INDIVIDUALLY'] == True):
-            plt.show()
-
+    output = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv')
+    output = output[output['log_status'] != 'r']
+    output['log_status'] = output['log_status'].astype(int)
+    plt.hist(output['log_status'])
     plt.show()

@@ -10,7 +10,14 @@ RTS_PARAMETERS :
 
 PLOTS:
     #If True it will Plot all the charts for a single log before continuing to plot the charts for other logs
-    PLOT_LOGS_INDIVIDUALLY: False
+    PLOT_LOGS_INDIVIDUALLY: True
+
+    SETPOINT_RANGES: 
+        ALLOW_SETPOINT_PLOT: True
+        #TODO: Put those as parameters in future
+        #SETPOINTS: [[-2.25, 8.55],[-2.25, 8.55],[-2.25, 8.55],]
+        #SETPOINTS_COLORS: [blue,orange,red]
+
     #List of of the test IDs to plot multiple visualizations or 'ALL' if all input tests want to be plotted
     LOGS_TO_PLOT: 'ALL'
 
