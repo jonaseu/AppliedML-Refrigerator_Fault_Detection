@@ -1,8 +1,11 @@
 from matplotlib.pyplot import plot, Line2D,Rectangle,Text
 from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler,MinMaxScaler
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+from sklearn.neural_network import MLPRegressor
+from sklearn.metrics import classification_report,confusion_matrix
+from sklearn import metrics
 import pandas as pd
 import glob
 import matplotlib.pylab as plt
@@ -667,7 +670,7 @@ if __name__ == '__main__':
             if(desired_log in log_key):
                 logs_to_plot.append(log_key)
 
-    # #For each of the desired logs, plot them
+    # #CREATE THE MANUAL DATABASE CLASSIFICATION
     # manual_classification = {}
     # #count = 1
     # for log_key in logs_to_plot:
@@ -686,46 +689,85 @@ if __name__ == '__main__':
 
     model_outputs = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv',index_col=0)
     model_inputs = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Pre Processed - Summarized Dataset.csv',index_col=0)
-    model_outputs.index = model_outputs + ".csv"
+    model_outputs.index = model_outputs.index + ".csv"
     databases_merged = model_outputs.join(model_inputs)
     databases_merged = databases_merged[databases_merged['log_status'] != 'r']
     databases_merged['log_status'] = databases_merged['log_status'].astype(int)
     
-    data_to_model = model_inputs
+    #TODO: Change this as it will crete problem with non 
+    data_to_model = databases_merged
 
-    #Using Isolation Forest
-    # isolationForest = IsolationForest(contamination=0.2).fit(data_to_model)
-    # predictions = isolationForest.predict(data_to_model)
-    # for id,value in enumerate(predictions):
-    #     if(value == -1):
-    #         log_key = data_to_model.index[id]
-    #         Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
-    #         plt.show()
-
-
-    #Using KMeans
-    scaler = StandardScaler()
-    scaled_features = scaler.fit_transform(data_to_model)
+    scaler = StandardScaler().fit(data_to_model)
+    scaled_features = scaler.transform(data_to_model)
+    #scaler = MinMaxScaler().fit(data_to_model)
+    #scaled_features = scaler.transform(data_to_model)
 
     pca = PCA(n_components=40)
     principalComponents = pca.fit_transform(scaled_features)
 
-    kmeans = KMeans(init="random",n_clusters=7,n_init=100,max_iter=1000,random_state=42)
-    kmeans_train = kmeans.fit(principalComponents)
-    predictions = kmeans_train.predict(principalComponents)
-    
-    data_to_model['cluster'] = predictions
-    elements_in_clusters = data_to_model['cluster'].value_counts().sort_values(ascending=True)
-    print(elements_in_clusters)
-    for cluster,cluster_count in elements_in_clusters.iteritems():
-        cluster_logs =  data_to_model[data_to_model['cluster'] == cluster]
+    scaled_features = pd.DataFrame(scaled_features,columns=data_to_model.columns)
+    scaled_features.index = data_to_model.index
 
-        clusters_plotted = 0
-        for log_key in cluster_logs.index:
-            plt.close()
-            clusters_plotted +=1
-            print("Cluster {}, with {}/{} logs. Log Id {}".format(cluster,clusters_plotted,cluster_count,log_key))
-            Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
-            plt.show(block=False)
-            if( input("Write 'n' to go to next cluster...") == 'n'):
-                break
+    DESIRED_MODEL = 'NN'
+    if(DESIRED_MODEL == 'IFOREST'):
+        #Using Isolation Forest
+        isolationForest = IsolationForest(contamination=0.2).fit(data_to_model)
+        predictions = isolationForest.predict(data_to_model)
+        for id,value in enumerate(predictions):
+                #Plot the outliers
+                if(value == -1):
+                    log_key = data_to_model.index[id]
+                    Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
+                    plt.show()
+        
+    elif(DESIRED_MODEL =='KMEANS'):
+        kmeans = KMeans(init="random",n_clusters=7,n_init=100,max_iter=1000,random_state=42)
+        kmeans_train = kmeans.fit(principalComponents)
+        predictions = kmeans_train.predict(principalComponents)
+        
+        data_to_model['cluster'] = predictions
+        elements_in_clusters = data_to_model['cluster'].value_counts().sort_values(ascending=True)
+        print(elements_in_clusters)
+        for cluster,cluster_count in elements_in_clusters.iteritems():
+            cluster_logs =  data_to_model[data_to_model['cluster'] == cluster]
+
+            clusters_plotted = 0
+            for log_key in cluster_logs.index:
+                plt.close()
+                clusters_plotted +=1
+                print("Cluster {}, with {}/{} logs. Log Id {}".format(cluster,clusters_plotted,cluster_count,log_key))
+                Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
+                plt.show(block=False)
+                if( input("Write 'n' to go to next cluster...") == 'n'):
+                    break
+
+    elif(DESIRED_MODEL =='NN'):
+        model_x = pd.DataFrame(scaled_features.drop('log_status',1))
+        model_x = model_x.astype('float')
+        model_y = pd.DataFrame(scaled_features['log_status'])
+        model_y = model_y.astype('float')
+        mlp = MLPRegressor(hidden_layer_sizes=(len(model_x.columns),len(model_x.columns)//2), activation='relu', max_iter=1000,verbose=True)
+        mlp.fit(model_x,model_y)
+
+        model_predicted_y = mlp.predict(model_x)
+        #print(metrics.mean_squared_log_error(model_y, model_predicted_y))
+
+        error_by_log = scaled_features
+        error_by_log['log_status_predicted'] = model_predicted_y
+        
+        error_by_log['log_status'].hist(bins=10,alpha=0.5,color='blue')
+        error_by_log['log_status_predicted'].hist(bins=10,alpha=0.5,color='red')
+        plt.legend(['Expected','Predicted'])
+        plt.show()
+
+        error_by_log['abs_error'] = abs(error_by_log['log_status_predicted'] - error_by_log['log_status'])
+        error_by_log = error_by_log.sort_values(by =['abs_error'] ,ascending=False)
+        for log_key in error_by_log.index:
+            title_text = 'Temperature Chart - '+ log_key.replace(".csv",'')
+            title_text += '- Expcted_{:.0f} Predicted_{:.0f}'.format(error_by_log['log_status'][log_key],error_by_log['log_status_predicted'][log_key]*100)
+            Visualize_SimpleTemperatureCharts(log_collection[log_key],title_text)
+            plt.show()
+
+
+    print('end')
+            
