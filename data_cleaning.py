@@ -651,7 +651,9 @@ def Remove_Files_From_Path(path):
         print("Cleaned output folder" + path)
 
 
-def CreateMLModel(desired_model = 'KMEANS'):
+def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
+    
+    #Getting inputs from the files generated on previous ML pipeline process
     model_outputs = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv',index_col=0)
     model_inputs = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Pre Processed - Summarized Dataset.csv',index_col=0)
     model_outputs.index = model_outputs.index + ".csv"
@@ -663,34 +665,41 @@ def CreateMLModel(desired_model = 'KMEANS'):
     #TODO: Split data on training and test 
     data_to_model = databases_merged
 
-    scaler = StandardScaler().fit(data_to_model)
-    scaled_features = scaler.transform(data_to_model)
-    #scaler = MinMaxScaler().fit(data_to_model)
-    #scaled_features = scaler.transform(data_to_model)
+    if(PARAMETERS['ML_MODELS']['DATA_SCALER'] == 'StandardScaler'):
+        scaler = StandardScaler().fit(data_to_model)
+        scaled_features = scaler.transform(data_to_model)
+    else:
+        scaler = MinMaxScaler().fit(data_to_model)
+        scaled_features = scaler.transform(data_to_model)
 
-    pca = PCA(n_components=40)
+    pca = PCA(n_components=PARAMETERS['ML_MODELS']['PCA_COMPONENTS'])
     principalComponents = pca.fit_transform(scaled_features)
 
     scaled_features = pd.DataFrame(scaled_features,columns=data_to_model.columns)
     scaled_features.index = data_to_model.index
 
     #TODO: Adapt all models to work with the inputs
+    ##========================================================================================================================
     if(desired_model == 'IFOREST'):
-        #Using Isolation Forest
-        #databases_merged = databases_merged[databases_merged['log_status'] == 0 or databases_merged['log_status'] == 100]
+        data_to_model = data_to_model[data_to_model['log_status'].isin([0,100])] #Filtering only extreme values, either good or faulty
         model_x = pd.DataFrame(data_to_model.drop('log_status',1))
 
-        isolationForest = IsolationForest(contamination=0.04).fit(model_x)
+        isolationForest = IsolationForest(contamination=PARAMETERS['ML_MODELS']['IFOREST_CONTAMINATION']).fit(model_x)
         predictions = isolationForest.predict(model_x)
+        log_count = 0
         for id,value in enumerate(predictions):
                 #Plot the outliers
                 if(value == -1):
                     log_key = data_to_model.index[id]
                     Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
+                    log_count += 1
+                    print('Ploting Isolation Forest Outliers {}/{}. Log Id {}'.format( log_count,len(predictions[predictions==-1]),log_key.replace(".csv",'') ))
+                    
                     plt.show()
         
+    ##========================================================================================================================
     elif(desired_model =='KMEANS'):
-        kmeans = KMeans(init="random",n_clusters=7,n_init=100,max_iter=1000,random_state=42)
+        kmeans = KMeans(init="random",n_clusters=PARAMETERS['ML_MODELS']['NUMBER_CLUSTERS'],n_init=100,max_iter=1000,random_state=42)
         kmeans_train = kmeans.fit(principalComponents)
         predictions = kmeans_train.predict(principalComponents)
         
@@ -707,9 +716,10 @@ def CreateMLModel(desired_model = 'KMEANS'):
                 print("Cluster {}, with {}/{} logs. Log Id {}".format(cluster,clusters_plotted,cluster_count,log_key))
                 Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
                 plt.show(block=False)
-                if( input("Write 'n' to go to next cluster...") == 'n'):
+                if( input("Write 'n' to go to next cluster or 'Enter' to go to next log >") == 'n'):
                     break
 
+    ##========================================================================================================================
     elif(desired_model =='NN'):
         model_x = pd.DataFrame(scaled_features.drop('log_status',1))
         model_x = model_x.astype('float')
@@ -735,6 +745,8 @@ def CreateMLModel(desired_model = 'KMEANS'):
             title_text += '- Expcted_{:.0f} Predicted_{:.0f}'.format(error_by_log['log_status'][log_key],error_by_log['log_status_predicted'][log_key]*100)
             Visualize_SimpleTemperatureCharts(log_collection[log_key],title_text)
             plt.show()
+
+
 
 
 if __name__ == '__main__':
@@ -791,7 +803,7 @@ if __name__ == '__main__':
             
             if(RECREATE_MANUAL_CLASSIFICATION == True):
                 #Get user Input of how log the logs
-                manual_classification[log_key] = input("How normal does {} looks like?, ".format(log_title))
+                manual_classification[log_key] = input("How normal does {} looks like? >".format(log_title))
                 plt.close()
                 manual_classification = pd.DataFrame.from_dict(manual_classification, orient='index')
                 manual_classification.index.rename('log_id').to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv')
@@ -800,5 +812,4 @@ if __name__ == '__main__':
             count += 1
         plt.show()
 
-
-    CreateMLModel()            
+    CreateMLModel()

@@ -62,3 +62,17 @@ FEATURE_EXTRACTION:
     #The number of frequency bins for the FFT
     #This will result in NUMBER_FREQUENCY_BINS * EXPECTED_COLUMNS new features for the model
     NUMBER_FREQUENCY_BINS : 20
+
+
+ML_MODELS:
+    #IFOREST, KMEANS or NN
+    ML_MODEL: 'KMEANS'
+
+    PCA_COMPONENTS: 80
+
+    NUMBER_CLUSTERS: 3
+
+    IFOREST_CONTAMINATION: 0.13
+
+    #StandardScaler or MinMaxScaler
+    DATA_SCALER: 'StandardScaler'
