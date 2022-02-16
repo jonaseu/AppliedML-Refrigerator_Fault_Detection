@@ -42,6 +42,8 @@ active_cursors = []
 previous_cursor_time = 0
 
 fft_active_cursors = {}
+
+TRANSLATION = {'w rc temp':'Refrigerator Temperature','w fc temp':'Freezer Temperature','w fc evap temp':'Evaporator Temperature','w pantry temp':'Shelf Temperature'}
 #===============================================================================================================
 #CODE
 #===============================================================================================================
@@ -105,7 +107,7 @@ def Visualize_SimpleTemperatureCharts(log,title=''):
 
 
     plt.title(title)
-    plt.legend(EXPECTED_COLUMNS)
+    plt.legend(['Refrigerator Temperature', 'Freezer Temperature','Evaporator Temperature','Shelf Temperature'])
     plt.ylabel('Temperature °C')
     plt.ylim([-40,40])
     plt.xlabel('Test Time (m)')
@@ -179,7 +181,7 @@ def Visualize_SpectogramOfDesiredColumns(log,title=''):
         t = t/60 #Time to minutes so we can match other charts
         sub_plot.pcolormesh(t, np.array(f), np.array(Sxx))
         #sub_plot2.specgram(log[col], Fs=1/50)
-        sub_plot.title.set_text('Spectogram - {}'.format(col))
+        sub_plot.title.set_text(TRANSLATION[col])
         subplot_counter += 1
     
     mplcursors.cursor(hover=True)
@@ -211,10 +213,10 @@ def Visualize_FFTOfDesiredColumns(log,title=''):
 
         sub_plot.plot( np.array(fft_f), np.abs(fft_y))
 
-        sub_plot.title.set_text('FFT - {}'.format(col))
+        sub_plot.title.set_text('FFT - {}'.format(TRANSLATION[col]))
         subplot_counter += 1
     
-    mplcursors.cursor(hover=True)
+    #mplcursors.cursor(hover=True)
     fig.suptitle(title)
     def onClickShowFrequency(event):
         global fft_active_cursors
@@ -236,7 +238,7 @@ def Visualize_FFTOfDesiredColumns(log,title=''):
     plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+title)
 
 
-def Visualize_CompletePreProcessedData(df_collection):
+def Visualize_CompletePreProcessedDataAndGenerateSummaryDatabase(df_collection):
         
     IGNORE_PERIOD = 0
 
@@ -263,91 +265,106 @@ def Visualize_CompletePreProcessedData(df_collection):
             for value in column_statistics:
                 summarized_dataset[df_key].append(value)
 
-        #Visualize_SimpleTemperatureCharts(df,'Temperature Chart - '+ df_key.replace(".csv",''))
-        #Visualize_FFTOfDesiredColumns(df,'FFT - Amplitude x Freq (Hz) - ' + df_key.replace(".csv",''))
-        
-        #Creates FFT for each column and put its into bins averaging then
-        #fig = plt.figure()
-        number_of_rows = int(math.ceil(len(EXPECTED_COLUMNS)/2))
-        subplot_counter = 1
-        for col in EXPECTED_COLUMNS:
-            log_fft = {}
-            log_fft['amplitude'] = np.abs(fft(df[col].values))
-            log_fft['frequency'] = fftfreq(len(df[col]), df[TEST_TIME_COLUMN_NAME][1] - df[TEST_TIME_COLUMN_NAME][0] )
-            log_fft = pd.DataFrame(log_fft)
-            log_fft['frequency_bin'] = pd.cut( log_fft['frequency'], feq_bins, include_lowest=True)
-            averaged_bins = log_fft.groupby('frequency_bin').mean()
-            #Append to the summarized dataset the binned aplitudes of the FFT
-            summarized_dataset[df_key].extend(averaged_bins['amplitude'].tolist())
-                    
-            #sub_plot = fig.add_subplot(number_of_rows,2,subplot_counter)
-            #bins_frequencies = [x.right for x in averaged_bins.index]
-            #sub_plot.step(bins_frequencies,averaged_bins['amplitude'])
 
-            #sub_plot.title.set_text('Binned FFT - {}'.format(col))
-            #subplot_counter += 1
+        # if('144219' in df_key):
+        #     Visualize_SimpleTemperatureCharts(df,'Temperature Chart - '+ df_key.replace(".csv",''))
+        #     Visualize_FFTOfDesiredColumns(df,'FFT - Amplitude x Freq (Hz) - ' + df_key.replace(".csv",''))
+            
+        #TODO: This needs to go to a separate function to visualize binned Frequency
+        #     #Creates FFT for each column and put its into bins averaging then
+        #     fig = plt.figure()
+        #     number_of_rows = int(math.ceil(len(EXPECTED_COLUMNS)/2))
+        #     subplot_counter = 1
+        #     for col in EXPECTED_COLUMNS:
+        #         log_fft = {}
+        #         log_fft['amplitude'] = np.abs(fft(df[col].values))
+        #         log_fft['frequency'] = fftfreq(len(df[col]), df[TEST_TIME_COLUMN_NAME][1] - df[TEST_TIME_COLUMN_NAME][0] )
+        #         log_fft = pd.DataFrame(log_fft)
+        #         log_fft['frequency_bin'] = pd.cut( log_fft['frequency'], feq_bins, include_lowest=True)
+        #         averaged_bins = log_fft.groupby('frequency_bin').mean()
+        #         #Append to the summarized dataset the binned aplitudes of the FFT
+        #         summarized_dataset[df_key].extend(averaged_bins['amplitude'].tolist())
+                        
+        #         sub_plot = fig.add_subplot(number_of_rows,2,subplot_counter)
+        #         bins_frequencies = [x.right for x in averaged_bins.index]
+        #         sub_plot.step(bins_frequencies,averaged_bins['amplitude'])
+
+        #         sub_plot.title.set_text('Binned FFT - {}'.format(TRANSLATION[col]))
+        #         subplot_counter += 1
+
+        #     fig.suptitle('Binned FFT - Amplitude x Freq (Hz) - ' + df_key.replace(".csv",''))            
+        #     fig.tight_layout()
+        #     plt.show()
+
 
 
         print('Percentage {:.2%}'.format(count/len(df_collection.keys())),end='\r' )
         count += 1
 
-    summarized_column_names = []
-    #summarized_dataset['TOTAL'] = []
-    for col in EXPECTED_COLUMNS: 
-        column_statistics = complete_df[col].describe()
-        for key,value in enumerate(column_statistics):
-            summarized_column_names.append(col + '_' + column_statistics.index[key])
-            #summarized_dataset['TOTAL'].append(value)
-        for bin_interval in averaged_bins.index:
-            summarized_column_names.append('Hz_{}_{:.2E}_to_{:.2E}'.format(col,bin_interval.left,bin_interval.right) )
-
-    summarized_dataset = pd.DataFrame.from_dict(summarized_dataset,orient='index',columns=summarized_column_names)
-    summarized_dataset.index.rename('log_id')
-    summarized_dataset.to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Pre Processed - Summarized Dataset.csv')
-
-    #Plot the ACF avereaged for each column
-    # number_of_rows = int((math.ceil(len(EXPECTED_COLUMNS)))/2)
-    # fig = plt.figure()
-    # subplot_counter = 1
+    # summarized_column_names = []
+    # #summarized_dataset['TOTAL'] = []
     # for col in EXPECTED_COLUMNS: 
-    #     df_col_acfs = pd.DataFrame(columns_acfs[col])
-    #     columns_acf_average[col] = df_col_acfs.mean()
+    #     column_statistics = complete_df[col].describe()
+    #     for key,value in enumerate(column_statistics):
+    #         summarized_column_names.append(col + '_' + column_statistics.index[key])
+    #         #summarized_dataset['TOTAL'].append(value)
+    #     for bin_interval in averaged_bins.index:
+    #         summarized_column_names.append('Hz_{}_{:.2E}_to_{:.2E}'.format(col,bin_interval.left,bin_interval.right) )
+
+    # summarized_dataset = pd.DataFrame.from_dict(summarized_dataset,orient='index',columns=summarized_column_names)
+    # summarized_dataset.index.rename('log_id')
+    # summarized_dataset.to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Pre Processed - Summarized Dataset.csv')
+
+    # Plot the ACF avereaged for each column
+    number_of_rows = int((math.ceil(len(EXPECTED_COLUMNS)))/2)
+    fig = plt.figure()
+    subplot_counter = 1
+    for col in EXPECTED_COLUMNS: 
+        df_col_acfs = pd.DataFrame(columns_acfs[col])
+        columns_acf_average[col] = df_col_acfs.mean()
         
-    #     sub_plot = fig.add_subplot(number_of_rows,2,subplot_counter)
-    #     sub_plot.stem(columns_acf_average[col])
-    #     sub_plot.title.set_text('ACF AVERAGED - {}'.format(col))
-    #     subplot_counter += 1
-    
-    # fig_title = 'FFT - Amplitude x Freq (Hz) - Complete Dataset'
-    # print('Ploting '+fig_title+'...') 
-    # Visualize_FFTOfDesiredColumns(complete_df,fig_title)
+        sub_plot = fig.add_subplot(number_of_rows,2,subplot_counter)
+        sub_plot.stem(columns_acf_average[col])
+        sub_plot.title.set_text('ACF AVERAGED - {}'.format(TRANSLATION[col]))
+        complete_df[col].name = TRANSLATION[col]
+        subplot_counter += 1
 
-    # fig_title = 'ACF Averaged of Temperatures'  
-    # print('Ploting '+fig_title+'...') 
-    # mplcursors.cursor(hover=True)
-    # fig.suptitle(fig_title)
-    # fig.tight_layout()
-    # plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
+    fig_title = 'FFT - Amplitude x Freq (Hz) - Complete Dataset'
+    print('Ploting '+fig_title+'...') 
+    Visualize_FFTOfDesiredColumns(complete_df,fig_title)
+    
+    complete_df.rename(columns = TRANSLATION, inplace=True)
 
-    # #Plot Correlation Matrix
-    # fig_title = 'Correlation Matrix of Temperatures - Complete Dataset'
-    # plt.figure()
-    # print('Ploting '+fig_title+'...')
-    # sns.heatmap(complete_df.corr(), annot=True)
-    # plt.title(fig_title)
-    # plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
+    fig_title = 'ACF Averaged of Temperatures'  
+    print('Ploting '+fig_title+'...') 
+    #mplcursors.cursor(hover=True)
+    fig.suptitle(fig_title)
+    fig.tight_layout()
+    plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
+
+
+    #Plot Correlation Matrix
+    fig_title = 'Correlation Matrix of Temperatures - Complete Dataset'
+    plt.figure()
+    print('Ploting '+fig_title+'...')
+    sns.heatmap(complete_df.corr(), annot=True)
+    plt.title(fig_title)
+    plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
+    plt.tick_params(axis='x', rotation=0)
+    fig.tight_layout()
+    fig.show()
+
+    #Plot violin plot of temperatures
+    fig_title = 'Violin Plot of Temperatures - Complete Dataset'
+    plt.figure()
+    print('Ploting '+fig_title+'...')
+    sns.violinplot(data=complete_df[[TRANSLATION[col] for col in EXPECTED_COLUMNS]])
+    plt.ylabel('Temperature (°C)')
+    plt.xlabel('Sensor')
+    plt.title(fig_title)
+    plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
     
-    # #Plot violin plot of temperatures
-    # fig_title = 'Violin Plot of Temperatures - Complete Dataset'
-    # plt.figure()
-    # print('Ploting '+fig_title+'...')
-    # sns.violinplot(data=complete_df[EXPECTED_COLUMNS])
-    # plt.ylabel('Temperature (°C)')
-    # plt.xlabel('Sensor')
-    # plt.title(fig_title)
-    # plt.savefig(PARAMETERS['PATHS']['OUTPUT_FIGURES_PATH']+fig_title)
-    
-    # plt.show()
+    plt.show()
 
 
 def Visualize_Logs_Duration_And_Sample_Rate(df_collection,title=''):
@@ -587,6 +604,7 @@ def PreProcessInputLogs(inputLogsPathFolder):
         cleaned_log_collection = Filter_Valid_Logs(log_collection)
         cleaned_log_collection = Filter_Desired_Columns(cleaned_log_collection)
         cleaned_log_collection = Filter_Valid_Rows(cleaned_log_collection)
+        #TODO: Add one filter to remove logs where the temperature readings are constant for too long
         cleaned_log_collection = Transform_Logs_From_Degree_F_To_C(cleaned_log_collection)
 
         #Visualize data before and after data cleaning
@@ -633,6 +651,92 @@ def Remove_Files_From_Path(path):
         print("Cleaned output folder" + path)
 
 
+def CreateMLModel(desired_model = 'KMEANS'):
+    model_outputs = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv',index_col=0)
+    model_inputs = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Pre Processed - Summarized Dataset.csv',index_col=0)
+    model_outputs.index = model_outputs.index + ".csv"
+    databases_merged = model_outputs.join(model_inputs)
+    databases_merged = databases_merged[databases_merged['log_status'] != 'r']
+    databases_merged['log_status'] = databases_merged['log_status'].astype(int)
+    #Visualize_BoxAndHist(databases_merged['log_status'],'Typicalness')
+
+    #TODO: Split data on training and test 
+    data_to_model = databases_merged
+
+    scaler = StandardScaler().fit(data_to_model)
+    scaled_features = scaler.transform(data_to_model)
+    #scaler = MinMaxScaler().fit(data_to_model)
+    #scaled_features = scaler.transform(data_to_model)
+
+    pca = PCA(n_components=40)
+    principalComponents = pca.fit_transform(scaled_features)
+
+    scaled_features = pd.DataFrame(scaled_features,columns=data_to_model.columns)
+    scaled_features.index = data_to_model.index
+
+    #TODO: Adapt all models to work with the inputs
+    if(desired_model == 'IFOREST'):
+        #Using Isolation Forest
+        #databases_merged = databases_merged[databases_merged['log_status'] == 0 or databases_merged['log_status'] == 100]
+        model_x = pd.DataFrame(data_to_model.drop('log_status',1))
+
+        isolationForest = IsolationForest(contamination=0.04).fit(model_x)
+        predictions = isolationForest.predict(model_x)
+        for id,value in enumerate(predictions):
+                #Plot the outliers
+                if(value == -1):
+                    log_key = data_to_model.index[id]
+                    Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
+                    plt.show()
+        
+    elif(desired_model =='KMEANS'):
+        kmeans = KMeans(init="random",n_clusters=7,n_init=100,max_iter=1000,random_state=42)
+        kmeans_train = kmeans.fit(principalComponents)
+        predictions = kmeans_train.predict(principalComponents)
+        
+        data_to_model['cluster'] = predictions
+        elements_in_clusters = data_to_model['cluster'].value_counts().sort_values(ascending=True)
+        print(elements_in_clusters)
+        for cluster,cluster_count in elements_in_clusters.iteritems():
+            cluster_logs =  data_to_model[data_to_model['cluster'] == cluster]
+
+            clusters_plotted = 0
+            for log_key in cluster_logs.index:
+                plt.close()
+                clusters_plotted +=1
+                print("Cluster {}, with {}/{} logs. Log Id {}".format(cluster,clusters_plotted,cluster_count,log_key))
+                Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
+                plt.show(block=False)
+                if( input("Write 'n' to go to next cluster...") == 'n'):
+                    break
+
+    elif(desired_model =='NN'):
+        model_x = pd.DataFrame(scaled_features.drop('log_status',1))
+        model_x = model_x.astype('float')
+        model_y = pd.DataFrame(scaled_features['log_status'])
+        model_y = model_y.astype('float')
+        mlp = MLPRegressor(hidden_layer_sizes=(len(model_x.columns),len(model_x.columns)//2), activation='relu', max_iter=1000,verbose=True)
+        mlp.fit(model_x,model_y)
+
+        model_predicted_y = mlp.predict(model_x)
+
+        error_by_log = scaled_features
+        error_by_log['log_status_predicted'] = model_predicted_y
+        
+        error_by_log['log_status'].hist(bins=10,alpha=0.5,color='blue')
+        error_by_log['log_status_predicted'].hist(bins=10,alpha=0.5,color='red')
+        plt.legend(['Expected','Predicted'])
+        plt.show()
+
+        error_by_log['abs_error'] = abs(error_by_log['log_status_predicted'] - error_by_log['log_status'])
+        error_by_log = error_by_log.sort_values(by =['abs_error'] ,ascending=False)
+        for log_key in error_by_log.index:
+            title_text = 'Temperature Chart - '+ log_key.replace(".csv",'')
+            title_text += '- Expcted_{:.0f} Predicted_{:.0f}'.format(error_by_log['log_status'][log_key],error_by_log['log_status_predicted'][log_key]*100)
+            Visualize_SimpleTemperatureCharts(log_collection[log_key],title_text)
+            plt.show()
+
+
 if __name__ == '__main__':
     EXPECTED_COLUMNS = PARAMETERS['LOG_FILTERING']['EXPECTED_COLUMNS']
     EXPECTED_COLUMNS = [col.lower() for col in EXPECTED_COLUMNS]
@@ -654,7 +758,8 @@ if __name__ == '__main__':
             file_name = file_path.replace(PARAMETERS['PATHS']['OUTPUT_LOG_FILES_PATH']+'\\','') #Remove path from file name
             log_collection[file_name] = pd.read_csv(file_path)
 
-    #Visualize_CompletePreProcessedData(log_collection)
+    
+    #Visualize_CompletePreProcessedDataAndGenerateSummaryDatabase(log_collection)
 
     #Plot some temperature charts for clarity according to what is defined on parameters yaml
     desired_logs = PARAMETERS['PLOTS']['LOGS_TO_PLOT']
@@ -670,104 +775,30 @@ if __name__ == '__main__':
             if(desired_log in log_key):
                 logs_to_plot.append(log_key)
 
-    # #CREATE THE MANUAL DATABASE CLASSIFICATION
-    # manual_classification = {}
-    # #count = 1
-    # for log_key in logs_to_plot:
-    #     log_title = log_key.replace(".csv",'')
-    #     Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_title)
-    #     #Visualize__AllLogCharts(log_collection[log_key],log_title)
-    #     if(PARAMETERS['PLOTS']['PLOT_LOGS_INDIVIDUALLY'] == True):
-    #         plt.show(block=False)
-    #     #manual_classification[log_key] = input("{}, ".format(log_title))
-    #     #plt.close()
-    #     manual_classification = pd.DataFrame.from_dict(manual_classification, orient='index')
-    #     manual_classification.index.rename('log_id').to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv')
-    #     #print("{}/{}".format(count,len(logs_to_plot)))
-    #     #count += 1
-    # plt.show()
-
-    model_outputs = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv',index_col=0)
-    model_inputs = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Pre Processed - Summarized Dataset.csv',index_col=0)
-    model_outputs.index = model_outputs.index + ".csv"
-    databases_merged = model_outputs.join(model_inputs)
-    databases_merged = databases_merged[databases_merged['log_status'] != 'r']
-    databases_merged['log_status'] = databases_merged['log_status'].astype(int)
     
-    #TODO: Change this as it will crete problem with non 
-    data_to_model = databases_merged
+    #CREATE THE MANUAL DATABASE CLASSIFICATION
+    RECREATE_MANUAL_CLASSIFICATION = False
+    manual_classification = {}
 
-    scaler = StandardScaler().fit(data_to_model)
-    scaled_features = scaler.transform(data_to_model)
-    #scaler = MinMaxScaler().fit(data_to_model)
-    #scaled_features = scaler.transform(data_to_model)
-
-    pca = PCA(n_components=40)
-    principalComponents = pca.fit_transform(scaled_features)
-
-    scaled_features = pd.DataFrame(scaled_features,columns=data_to_model.columns)
-    scaled_features.index = data_to_model.index
-
-    DESIRED_MODEL = 'NN'
-    if(DESIRED_MODEL == 'IFOREST'):
-        #Using Isolation Forest
-        isolationForest = IsolationForest(contamination=0.2).fit(data_to_model)
-        predictions = isolationForest.predict(data_to_model)
-        for id,value in enumerate(predictions):
-                #Plot the outliers
-                if(value == -1):
-                    log_key = data_to_model.index[id]
-                    Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
-                    plt.show()
-        
-    elif(DESIRED_MODEL =='KMEANS'):
-        kmeans = KMeans(init="random",n_clusters=7,n_init=100,max_iter=1000,random_state=42)
-        kmeans_train = kmeans.fit(principalComponents)
-        predictions = kmeans_train.predict(principalComponents)
-        
-        data_to_model['cluster'] = predictions
-        elements_in_clusters = data_to_model['cluster'].value_counts().sort_values(ascending=True)
-        print(elements_in_clusters)
-        for cluster,cluster_count in elements_in_clusters.iteritems():
-            cluster_logs =  data_to_model[data_to_model['cluster'] == cluster]
-
-            clusters_plotted = 0
-            for log_key in cluster_logs.index:
-                plt.close()
-                clusters_plotted +=1
-                print("Cluster {}, with {}/{} logs. Log Id {}".format(cluster,clusters_plotted,cluster_count,log_key))
-                Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
+    count = 1
+    if(PARAMETERS['PLOTS']['PLOT_LOGS'] == True ):
+        for log_key in logs_to_plot:
+            log_title = log_key.replace(".csv",'')
+            Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_title)
+            Visualize__AllLogCharts(log_collection[log_key],log_title)
+            if(PARAMETERS['PLOTS']['PLOT_LOGS_INDIVIDUALLY'] == True or RECREATE_MANUAL_CLASSIFICATION == True):
                 plt.show(block=False)
-                if( input("Write 'n' to go to next cluster...") == 'n'):
-                    break
+            
+            if(RECREATE_MANUAL_CLASSIFICATION == True):
+                #Get user Input of how log the logs
+                manual_classification[log_key] = input("How normal does {} looks like?, ".format(log_title))
+                plt.close()
+                manual_classification = pd.DataFrame.from_dict(manual_classification, orient='index')
+                manual_classification.index.rename('log_id').to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv')
 
-    elif(DESIRED_MODEL =='NN'):
-        model_x = pd.DataFrame(scaled_features.drop('log_status',1))
-        model_x = model_x.astype('float')
-        model_y = pd.DataFrame(scaled_features['log_status'])
-        model_y = model_y.astype('float')
-        mlp = MLPRegressor(hidden_layer_sizes=(len(model_x.columns),len(model_x.columns)//2), activation='relu', max_iter=1000,verbose=True)
-        mlp.fit(model_x,model_y)
-
-        model_predicted_y = mlp.predict(model_x)
-        #print(metrics.mean_squared_log_error(model_y, model_predicted_y))
-
-        error_by_log = scaled_features
-        error_by_log['log_status_predicted'] = model_predicted_y
-        
-        error_by_log['log_status'].hist(bins=10,alpha=0.5,color='blue')
-        error_by_log['log_status_predicted'].hist(bins=10,alpha=0.5,color='red')
-        plt.legend(['Expected','Predicted'])
+            print("Plotting log {}/{}".format(count,len(logs_to_plot)))
+            count += 1
         plt.show()
 
-        error_by_log['abs_error'] = abs(error_by_log['log_status_predicted'] - error_by_log['log_status'])
-        error_by_log = error_by_log.sort_values(by =['abs_error'] ,ascending=False)
-        for log_key in error_by_log.index:
-            title_text = 'Temperature Chart - '+ log_key.replace(".csv",'')
-            title_text += '- Expcted_{:.0f} Predicted_{:.0f}'.format(error_by_log['log_status'][log_key],error_by_log['log_status_predicted'][log_key]*100)
-            Visualize_SimpleTemperatureCharts(log_collection[log_key],title_text)
-            plt.show()
 
-
-    print('end')
-            
+    CreateMLModel()            

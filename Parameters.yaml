@@ -9,17 +9,23 @@ RTS_PARAMETERS :
     INVALID_READING : -999
 
 PLOTS:
+    #If should plot logs for each of the LOGS_TO_PLOT
+    PLOT_LOGS: False
+
+    #List of of the test IDs to plot multiple visualizations or 'ALL' if all input tests want to be plotted
+    LOGS_TO_PLOT: '144219'
+
     #If True it will Plot all the charts for a single log before continuing to plot the charts for other logs
     PLOT_LOGS_INDIVIDUALLY: True
 
+    #TODO: Implement this in a separate function
+    PLOT_FFT_BINNED_FREQUENCIES: False
+
     SETPOINT_RANGES: 
-        ALLOW_SETPOINT_PLOT: True
+        ALLOW_SETPOINT_PLOT: False
         #TODO: Put those as parameters in future
         #SETPOINTS: [[-2.25, 8.55],[-2.25, 8.55],[-2.25, 8.55],]
-        #SETPOINTS_COLORS: [blue,orange,red]
 
-    #List of of the test IDs to plot multiple visualizations or 'ALL' if all input tests want to be plotted
-    LOGS_TO_PLOT: 'ALL'
 
 LOG_FILTERING :
     #What are the desired columns from the logs, if the log doesn't contain any of those, it will be removed
@@ -40,6 +46,7 @@ LOG_FILTERING :
     
     #What is the minimal sample rate
     MINIMAL_LOG_SAMPLE_INTERVAL : 40
+
 
 
 FEATURE_EXTRACTION:
