@@ -107,7 +107,7 @@ def Visualize_SimpleTemperatureCharts(log,title=''):
 
 
     plt.title(title)
-    plt.legend(['Refrigerator Temperature', 'Freezer Temperature','Evaporator Temperature','Shelf Temperature'])
+    # plt.legend(['Refrigerator Temperature', 'Freezer Temperature','Evaporator Temperature','Shelf Temperature'])
     plt.ylabel('Temperature °C')
     plt.ylim([-40,40])
     plt.xlabel('Test Time (m)')
@@ -262,58 +262,53 @@ def Visualize_CompletePreProcessedDataAndGenerateSummaryDatabase(df_collection):
             columns_acfs[col].append( acf(df[col],nlags=PARAMETERS['FEATURE_EXTRACTION']['ACF_NUMBER_OF_LAGS']) )
             
             column_statistics = df[col].describe()
+            column_statistics = column_statistics[column_statistics.index !='count'] #Count should not be considered as statistic
             for value in column_statistics:
                 summarized_dataset[df_key].append(value)
-
-
-        # if('144219' in df_key):
-        #     Visualize_SimpleTemperatureCharts(df,'Temperature Chart - '+ df_key.replace(".csv",''))
-        #     Visualize_FFTOfDesiredColumns(df,'FFT - Amplitude x Freq (Hz) - ' + df_key.replace(".csv",''))
-            
+        
         #TODO: This needs to go to a separate function to visualize binned Frequency
-        #     #Creates FFT for each column and put its into bins averaging then
-        #     fig = plt.figure()
-        #     number_of_rows = int(math.ceil(len(EXPECTED_COLUMNS)/2))
-        #     subplot_counter = 1
-        #     for col in EXPECTED_COLUMNS:
-        #         log_fft = {}
-        #         log_fft['amplitude'] = np.abs(fft(df[col].values))
-        #         log_fft['frequency'] = fftfreq(len(df[col]), df[TEST_TIME_COLUMN_NAME][1] - df[TEST_TIME_COLUMN_NAME][0] )
-        #         log_fft = pd.DataFrame(log_fft)
-        #         log_fft['frequency_bin'] = pd.cut( log_fft['frequency'], feq_bins, include_lowest=True)
-        #         averaged_bins = log_fft.groupby('frequency_bin').mean()
-        #         #Append to the summarized dataset the binned aplitudes of the FFT
-        #         summarized_dataset[df_key].extend(averaged_bins['amplitude'].tolist())
-                        
-        #         sub_plot = fig.add_subplot(number_of_rows,2,subplot_counter)
-        #         bins_frequencies = [x.right for x in averaged_bins.index]
-        #         sub_plot.step(bins_frequencies,averaged_bins['amplitude'])
+        #Creates FFT for each column and put its into bins averaging then
+        #fig = plt.figure()
+        number_of_rows = int(math.ceil(len(EXPECTED_COLUMNS)/2))
+        subplot_counter = 1
+        for col in EXPECTED_COLUMNS:
+            log_fft = {}
+            log_fft['amplitude'] = np.abs(fft(df[col].values))
+            log_fft['frequency'] = fftfreq(len(df[col]), df[TEST_TIME_COLUMN_NAME][1] - df[TEST_TIME_COLUMN_NAME][0] )
+            log_fft = pd.DataFrame(log_fft)
+            log_fft['frequency_bin'] = pd.cut( log_fft['frequency'], feq_bins, include_lowest=True)
+            averaged_bins = log_fft.groupby('frequency_bin').mean()
+            #Append to the summarized dataset the binned aplitudes of the FFT
+            summarized_dataset[df_key].extend(averaged_bins['amplitude'].tolist())
+                    
+            #sub_plot = fig.add_subplot(number_of_rows,2,subplot_counter)
+            bins_frequencies = [x.right for x in averaged_bins.index]
+            #sub_plot.step(bins_frequencies,averaged_bins['amplitude'])
 
-        #         sub_plot.title.set_text('Binned FFT - {}'.format(TRANSLATION[col]))
-        #         subplot_counter += 1
+            #sub_plot.title.set_text('Binned FFT - {}'.format(TRANSLATION[col]))
+            subplot_counter += 1
 
-        #     fig.suptitle('Binned FFT - Amplitude x Freq (Hz) - ' + df_key.replace(".csv",''))            
-        #     fig.tight_layout()
-        #     plt.show()
-
-
+        #fig.suptitle('Binned FFT - Amplitude x Freq (Hz) - ' + df_key.replace(".csv",''))            
+        #fig.tight_layout()
+        #plt.show()
 
         print('Percentage {:.2%}'.format(count/len(df_collection.keys())),end='\r' )
         count += 1
 
-    # summarized_column_names = []
-    # #summarized_dataset['TOTAL'] = []
-    # for col in EXPECTED_COLUMNS: 
-    #     column_statistics = complete_df[col].describe()
-    #     for key,value in enumerate(column_statistics):
-    #         summarized_column_names.append(col + '_' + column_statistics.index[key])
-    #         #summarized_dataset['TOTAL'].append(value)
-    #     for bin_interval in averaged_bins.index:
-    #         summarized_column_names.append('Hz_{}_{:.2E}_to_{:.2E}'.format(col,bin_interval.left,bin_interval.right) )
+    summarized_column_names = []
+    #summarized_dataset['TOTAL'] = []
+    for col in EXPECTED_COLUMNS: 
+        column_statistics = complete_df[col].describe()
+        column_statistics = column_statistics[column_statistics.index !='count'] #Count should not be considered as statistic
+        for key,value in enumerate(column_statistics):
+            summarized_column_names.append(col + '_' + column_statistics.index[key])
+            #summarized_dataset['TOTAL'].append(value)
+        for bin_interval in averaged_bins.index:
+            summarized_column_names.append('Hz_{}_{:.2E}_to_{:.2E}'.format(col,bin_interval.left,bin_interval.right) )
 
-    # summarized_dataset = pd.DataFrame.from_dict(summarized_dataset,orient='index',columns=summarized_column_names)
-    # summarized_dataset.index.rename('log_id')
-    # summarized_dataset.to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Pre Processed - Summarized Dataset.csv')
+    summarized_dataset = pd.DataFrame.from_dict(summarized_dataset,orient='index',columns=summarized_column_names)
+    summarized_dataset.index.rename('log_id')
+    summarized_dataset.to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Pre Processed - Summarized Dataset.csv')
 
     # Plot the ACF avereaged for each column
     number_of_rows = int((math.ceil(len(EXPECTED_COLUMNS)))/2)
@@ -659,8 +654,8 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
     model_outputs.index = model_outputs.index + ".csv"
     databases_merged = model_outputs.join(model_inputs)
     databases_merged = databases_merged[databases_merged['log_status'] != 'r']
-    databases_merged['log_status'] = databases_merged['log_status'].astype(int)
-    #Visualize_BoxAndHist(databases_merged['log_status'],'Typicalness')
+    Visualize_BoxAndHist(databases_merged['log_status'],'Typicalness')
+    databases_merged['log_status'] = databases_merged['log_status'].astype(int) #TODO: this needs to be fixed to translate to numbers
 
     #TODO: Split data on training and test 
     data_to_model = databases_merged
@@ -681,7 +676,7 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
     #TODO: Adapt all models to work with the inputs
     ##========================================================================================================================
     if(desired_model == 'IFOREST'):
-        data_to_model = data_to_model[data_to_model['log_status'].isin([0,100])] #Filtering only extreme values, either good or faulty
+        #data_to_model = data_to_model[data_to_model['log_status'].isin([0,100])] #Filtering only extreme values, either good or faulty
         model_x = pd.DataFrame(data_to_model.drop('log_status',1))
 
         isolationForest = IsolationForest(contamination=PARAMETERS['ML_MODELS']['IFOREST_CONTAMINATION']).fit(model_x)
@@ -711,10 +706,10 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
 
             clusters_plotted = 0
             for log_key in cluster_logs.index:
-                plt.close()
+                #plt.close()
                 clusters_plotted +=1
                 print("Cluster {}, with {}/{} logs. Log Id {}".format(cluster,clusters_plotted,cluster_count,log_key))
-                Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
+                Visualize_SimpleTemperatureCharts(log_collection[log_key],log_key.replace(".csv",'') + ' - Cluster {}'.format(cluster))
                 plt.show(block=False)
                 if( input("Write 'n' to go to next cluster or 'Enter' to go to next log >") == 'n'):
                     break
@@ -790,23 +785,23 @@ if __name__ == '__main__':
     
     #CREATE THE MANUAL DATABASE CLASSIFICATION
     RECREATE_MANUAL_CLASSIFICATION = False
-    manual_classification = {}
+    manual_classification = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv', index_col=0, squeeze=True).to_dict()
 
     count = 1
     if(PARAMETERS['PLOTS']['PLOT_LOGS'] == True ):
         for log_key in logs_to_plot:
             log_title = log_key.replace(".csv",'')
-            Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_title)
-            Visualize__AllLogCharts(log_collection[log_key],log_title)
-            if(PARAMETERS['PLOTS']['PLOT_LOGS_INDIVIDUALLY'] == True or RECREATE_MANUAL_CLASSIFICATION == True):
-                plt.show(block=False)
-            
-            if(RECREATE_MANUAL_CLASSIFICATION == True):
-                #Get user Input of how log the logs
-                manual_classification[log_key] = input("How normal does {} looks like? >".format(log_title))
-                plt.close()
-                manual_classification = pd.DataFrame.from_dict(manual_classification, orient='index')
-                manual_classification.index.rename('log_id').to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv')
+            if(log_key not in manual_classification or RECREATE_MANUAL_CLASSIFICATION == False):
+                #Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_title)
+                Visualize__AllLogCharts(log_collection[log_key],log_title)
+                if(PARAMETERS['PLOTS']['PLOT_LOGS_INDIVIDUALLY'] == True or RECREATE_MANUAL_CLASSIFICATION == True):
+                    plt.show(block=False)
+                
+                if(RECREATE_MANUAL_CLASSIFICATION == True):
+                    #Get user Input of how log the logs
+                    manual_classification[log_key] = input("How normal does {} looks like? >".format(log_title))
+                    plt.close()
+                    pd.DataFrame.from_dict(manual_classification,columns=['log_id','log_status'],orient='index').to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv')
 
             print("Plotting log {}/{}".format(count,len(logs_to_plot)))
             count += 1
