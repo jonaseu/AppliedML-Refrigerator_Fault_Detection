@@ -10,7 +10,7 @@ RTS_PARAMETERS :
 
 PLOTS:
     #If should plot logs for each of the LOGS_TO_PLOT
-    PLOT_LOGS: True
+    PLOT_LOGS: False
 
     #List of of the test IDs to plot multiple visualizations or 'ALL' if all input tests want to be plotted
     LOGS_TO_PLOT: 'ALL'

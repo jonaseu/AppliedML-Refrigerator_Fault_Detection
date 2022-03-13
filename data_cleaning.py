@@ -651,10 +651,12 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
     #Getting inputs from the files generated on previous ML pipeline process
     model_outputs = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv',index_col=0)
     model_inputs = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Pre Processed - Summarized Dataset.csv',index_col=0)
-    model_outputs.index = model_outputs.index + ".csv"
+    model_outputs.index = model_outputs.index
+    model_outputs = model_outputs[model_outputs['log_usage'] != 'REMOVE']
+    del model_outputs['log_usage']
+
     databases_merged = model_outputs.join(model_inputs)
-    databases_merged = databases_merged[databases_merged['log_status'] != 'r']
-    Visualize_BoxAndHist(databases_merged['log_status'],'Typicalness')
+    databases_merged.log_status, decode = pd.factorize(databases_merged.log_status)
     databases_merged['log_status'] = databases_merged['log_status'].astype(int) #TODO: this needs to be fixed to translate to numbers
 
     #TODO: Split data on training and test 
@@ -785,23 +787,23 @@ if __name__ == '__main__':
     
     #CREATE THE MANUAL DATABASE CLASSIFICATION
     RECREATE_MANUAL_CLASSIFICATION = False
-    manual_classification = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv', index_col=0, squeeze=True).to_dict()
+    manual_classification = pd.DataFrame(pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv', index_col=0, squeeze=True))
 
     count = 1
     if(PARAMETERS['PLOTS']['PLOT_LOGS'] == True ):
         for log_key in logs_to_plot:
             log_title = log_key.replace(".csv",'')
             if(log_key not in manual_classification or RECREATE_MANUAL_CLASSIFICATION == False):
-                #Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_title)
-                Visualize__AllLogCharts(log_collection[log_key],log_title)
+                Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_title)
+                #Visualize__AllLogCharts(log_collection[log_key],log_title)
                 if(PARAMETERS['PLOTS']['PLOT_LOGS_INDIVIDUALLY'] == True or RECREATE_MANUAL_CLASSIFICATION == True):
                     plt.show(block=False)
                 
                 if(RECREATE_MANUAL_CLASSIFICATION == True):
                     #Get user Input of how log the logs
-                    manual_classification[log_key] = input("How normal does {} looks like? >".format(log_title))
+                    manual_classification[log_key] = input("What is the class of log {}? >".format(log_title))
                     plt.close()
-                    pd.DataFrame.from_dict(manual_classification,columns=['log_id','log_status'],orient='index').to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv')
+                    manual_classification.to_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv')
 
             print("Plotting log {}/{}".format(count,len(logs_to_plot)))
             count += 1
