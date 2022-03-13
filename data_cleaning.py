@@ -1,7 +1,7 @@
 from matplotlib.pyplot import plot, Line2D,Rectangle,Text
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler,MinMaxScaler
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans,DBSCAN
 from sklearn.decomposition import PCA
 from sklearn.neural_network import MLPRegressor
 from sklearn.metrics import classification_report,confusion_matrix
@@ -107,7 +107,7 @@ def Visualize_SimpleTemperatureCharts(log,title=''):
 
 
     plt.title(title)
-    # plt.legend(['Refrigerator Temperature', 'Freezer Temperature','Evaporator Temperature','Shelf Temperature'])
+    plt.legend(['Refrigerator Temperature', 'Freezer Temperature','Evaporator Temperature','Shelf Temperature'])
     plt.ylabel('Temperature °C')
     plt.ylim([-40,40])
     plt.xlabel('Test Time (m)')
@@ -743,6 +743,34 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
             Visualize_SimpleTemperatureCharts(log_collection[log_key],title_text)
             plt.show()
 
+    ##========================================================================================================================
+    elif(desired_model =='DBSCAN'):
+        db = DBSCAN(eps=5,min_samples=2).fit(scaled_features)
+        core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
+        core_samples_mask[db.core_sample_indices_] = True
+        labels = db.labels_
+
+        # Number of clusters in labels, ignoring noise if present.
+        n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+        n_noise_ = list(labels).count(-1)
+        print("Estimated number of clusters: %d" % n_clusters_)
+        print("Estimated number of noise points: %d" % n_noise_)
+
+        data_to_model['cluster'] = labels
+        elements_in_clusters = data_to_model['cluster'].value_counts().sort_values(ascending=True)
+        print(elements_in_clusters)
+        for cluster,cluster_count in elements_in_clusters.iteritems():
+            cluster_logs =  data_to_model[data_to_model['cluster'] == cluster]
+
+            clusters_plotted = 0
+            for log_key in cluster_logs.index:
+                #plt.close()
+                clusters_plotted +=1
+                print("Cluster {}, with {}/{} logs. Log Id {}".format(cluster,clusters_plotted,cluster_count,log_key))
+                Visualize_SimpleTemperatureCharts(log_collection[log_key],log_key.replace(".csv",'') + ' - Cluster {}'.format(cluster))
+                plt.show(block=False)
+                if( input("Write 'n' to go to next cluster or 'Enter' to go to next log >") == 'n'):
+                    break
 
 
 
