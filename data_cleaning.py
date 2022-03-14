@@ -1,10 +1,11 @@
 from matplotlib.pyplot import plot, Line2D,Rectangle,Text
-from sklearn.ensemble import IsolationForest
+from sklearn.ensemble import IsolationForest,RandomForestClassifier
 from sklearn.preprocessing import StandardScaler,MinMaxScaler
 from sklearn.cluster import KMeans,DBSCAN
 from sklearn.decomposition import PCA
 from sklearn.neural_network import MLPRegressor
-from sklearn.metrics import classification_report,confusion_matrix
+from sklearn.metrics import classification_report,confusion_matrix,accuracy_score, classification_report,ConfusionMatrixDisplay
+from sklearn.model_selection import StratifiedKFold
 from sklearn import metrics
 import pandas as pd
 import glob
@@ -643,7 +644,7 @@ def Remove_Files_From_Path(path):
     if(len(logs_on_output_folder) > 0):
         for log_path in logs_on_output_folder:
             os.remove(log_path)
-        print("Cleaned output folder" + path)
+        print("Cleaned output folder" + path)   
 
 
 def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
@@ -652,37 +653,45 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
     model_outputs = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Database Manual Classification.csv',index_col=0)
     model_inputs = pd.read_csv(PARAMETERS['PATHS']['OUTPUT_PATH']+'_Pre Processed - Summarized Dataset.csv',index_col=0)
     model_outputs.index = model_outputs.index
+
+    #Manual adjusting on the Classification database
     model_outputs = model_outputs[model_outputs['log_usage'] != 'REMOVE']
+    model_outputs = model_outputs[model_outputs['log_usage'] != 'Fault']
+    model_outputs = model_outputs[model_outputs['log_status'] != 'load']
+    model_outputs['log_status'].replace('pulldown defrost','pulldown',inplace=True)
     del model_outputs['log_usage']
 
     databases_merged = model_outputs.join(model_inputs)
-    databases_merged.log_status, decode = pd.factorize(databases_merged.log_status)
-    databases_merged['log_status'] = databases_merged['log_status'].astype(int) #TODO: this needs to be fixed to translate to numbers
+    print(databases_merged['log_status'].value_counts())
+    databases_merged['log_status_numeric'], label = pd.factorize(databases_merged.log_status)
+    databases_merged['log_status_numeric'] = databases_merged['log_status_numeric'].astype(int) #TODO: this needs to be fixed to translate to numbers
 
     #TODO: Split data on training and test 
     data_to_model = databases_merged
+    data_to_scale = pd.DataFrame(data_to_model.drop('log_status',1))
 
     if(PARAMETERS['ML_MODELS']['DATA_SCALER'] == 'StandardScaler'):
-        scaler = StandardScaler().fit(data_to_model)
-        scaled_features = scaler.transform(data_to_model)
+        scaler = StandardScaler().fit(data_to_scale)
+        scaled_features = scaler.transform(data_to_scale)
     else:
-        scaler = MinMaxScaler().fit(data_to_model)
-        scaled_features = scaler.transform(data_to_model)
+        scaler = MinMaxScaler().fit(data_to_scale)
+        scaled_features = scaler.transform(data_to_scale)
 
     pca = PCA(n_components=PARAMETERS['ML_MODELS']['PCA_COMPONENTS'])
     principalComponents = pca.fit_transform(scaled_features)
 
-    scaled_features = pd.DataFrame(scaled_features,columns=data_to_model.columns)
-    scaled_features.index = data_to_model.index
+    scaled_features = pd.DataFrame(scaled_features,columns=data_to_scale.columns)
+    scaled_features.index = data_to_scale.index
 
-    #TODO: Adapt all models to work with the inputs
     ##========================================================================================================================
     if(desired_model == 'IFOREST'):
-        #data_to_model = data_to_model[data_to_model['log_status'].isin([0,100])] #Filtering only extreme values, either good or faulty
-        model_x = pd.DataFrame(data_to_model.drop('log_status',1))
+        model_x = pd.DataFrame(data_to_model.drop(['log_status','log_status_numeric'],1))
 
         isolationForest = IsolationForest(contamination=PARAMETERS['ML_MODELS']['IFOREST_CONTAMINATION']).fit(model_x)
-        predictions = isolationForest.predict(model_x)
+        predictions = isolationForest.predict(model_x)    
+        data_to_model['iForest'] = predictions
+        print(data_to_model[data_to_model['iForest']==-1])
+
         log_count = 0
         for id,value in enumerate(predictions):
                 #Plot the outliers
@@ -696,11 +705,12 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
         
     ##========================================================================================================================
     elif(desired_model =='KMEANS'):
-        kmeans = KMeans(init="random",n_clusters=PARAMETERS['ML_MODELS']['NUMBER_CLUSTERS'],n_init=100,max_iter=1000,random_state=42)
+        kmeans = KMeans(init="random",n_clusters=PARAMETERS['ML_MODELS']['KMEANS_CLUSTERS'],n_init=100,max_iter=1000,random_state=42)
         kmeans_train = kmeans.fit(principalComponents)
         predictions = kmeans_train.predict(principalComponents)
         
         data_to_model['cluster'] = predictions
+        data_to_model.insert(1,'cluster',predictions)
         elements_in_clusters = data_to_model['cluster'].value_counts().sort_values(ascending=True)
         print(elements_in_clusters)
         for cluster,cluster_count in elements_in_clusters.iteritems():
@@ -718,7 +728,7 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
 
     ##========================================================================================================================
     elif(desired_model =='NN'):
-        model_x = pd.DataFrame(scaled_features.drop('log_status',1))
+        model_x = pd.DataFrame(scaled_features.drop('log_status_numeric',1))
         model_x = model_x.astype('float')
         model_y = pd.DataFrame(scaled_features['log_status'])
         model_y = model_y.astype('float')
@@ -745,6 +755,7 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
 
     ##========================================================================================================================
     elif(desired_model =='DBSCAN'):
+        scaled_features = pd.DataFrame(scaled_features.drop('log_status_numeric',1))
         db = DBSCAN(eps=5,min_samples=2).fit(scaled_features)
         core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
         core_samples_mask[db.core_sample_indices_] = True
@@ -772,6 +783,46 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
                 if( input("Write 'n' to go to next cluster or 'Enter' to go to next log >") == 'n'):
                     break
 
+    ##========================================================================================================================
+    if(desired_model == 'RANDOMFOREST'):
+
+        model_y = data_to_model['log_status']
+        model_x = pd.DataFrame(data_to_model.drop(['log_status','log_status_numeric'],1))
+        
+        skf = StratifiedKFold(n_splits=5)
+        skf.get_n_splits(model_x, model_y)
+
+        for train_index, test_index in skf.split(model_x, model_y):
+            X_train, X_test = model_x.iloc[train_index], model_x.iloc[test_index]
+            y_train, y_test = model_y.iloc[train_index], model_y.iloc[test_index]
+
+            randomForest = RandomForestClassifier(random_state=0)
+            randomForest.fit(X_train, y_train)
+            predict_train = randomForest.predict(X_train)
+            predict_test = randomForest.predict(X_test)
+
+            print("\nTrain Accuracy:{}".format(accuracy_score(predict_train,y_train)))
+            print("Test Accuracy:{}".format(accuracy_score(predict_test,y_test)))
+
+            #data_to_model.insert(1,'randomforest',randomForest.predict(model_x))
+            # log_count = 0
+            # for id,value in enumerate(data_to_model['randomforest']):
+            #         #Plot the outliers
+            #         if(value != data_to_model['log_status'][id]):
+            #             log_key = data_to_model.index[id]
+            #             log_count += 1
+            #             Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
+            #             print('Ploting Isolation Forest Outliers {}/{}. Log Id {}'.format( log_count,len(data_to_model[value != data_to_model['log_status']]),log_key.replace(".csv",'') ))
+                        
+            #             plt.show()
+            
+            cmatrix = confusion_matrix(y_test,predict_test)
+            disp = ConfusionMatrixDisplay(cmatrix, display_labels=randomForest.classes_)
+            disp.plot()
+        plt.show()
+
+
+    data_to_model.to_csv("model_output.csv")
 
 
 if __name__ == '__main__':
