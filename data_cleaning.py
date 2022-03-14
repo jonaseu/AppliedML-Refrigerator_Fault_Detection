@@ -4,9 +4,11 @@ from sklearn.preprocessing import StandardScaler,MinMaxScaler
 from sklearn.cluster import KMeans,DBSCAN
 from sklearn.decomposition import PCA
 from sklearn.neural_network import MLPRegressor
-from sklearn.metrics import classification_report,confusion_matrix,accuracy_score, classification_report,ConfusionMatrixDisplay
+from sklearn.metrics import classification_report,confusion_matrix,accuracy_score, classification_report,ConfusionMatrixDisplay,f1_score
+from copy import deepcopy
+from sklearn.tree import export_graphviz
+from subprocess import call
 from sklearn.model_selection import StratifiedKFold
-from sklearn import metrics
 import pandas as pd
 import glob
 import matplotlib.pylab as plt
@@ -305,7 +307,7 @@ def Visualize_CompletePreProcessedDataAndGenerateSummaryDatabase(df_collection):
             summarized_column_names.append(col + '_' + column_statistics.index[key])
             #summarized_dataset['TOTAL'].append(value)
         for bin_interval in averaged_bins.index:
-            summarized_column_names.append('Hz_{}_{:.2E}_to_{:.2E}'.format(col,bin_interval.left,bin_interval.right) )
+            summarized_column_names.append('{}_Hz_{:.2E}_to_{:.2E}'.format(col,bin_interval.left,bin_interval.right) )
 
     summarized_dataset = pd.DataFrame.from_dict(summarized_dataset,orient='index',columns=summarized_column_names)
     summarized_dataset.index.rename('log_id')
@@ -792,34 +794,67 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
         skf = StratifiedKFold(n_splits=5)
         skf.get_n_splits(model_x, model_y)
 
-        for train_index, test_index in skf.split(model_x, model_y):
-            X_train, X_test = model_x.iloc[train_index], model_x.iloc[test_index]
-            y_train, y_test = model_y.iloc[train_index], model_y.iloc[test_index]
+        max_depths = [i for i in range(1,10)]
+        estimators = 1000
+        depth = 3
+        best_score = 0
+        fold_scores = []
+        for depth in max_depths:
+            fold_id = 0
+            for train_index, test_index in skf.split(model_x, model_y):
+                fold_id += 1
+                X_train, X_test = model_x.iloc[train_index], model_x.iloc[test_index]
+                y_train, y_test = model_y.iloc[train_index], model_y.iloc[test_index]
 
-            randomForest = RandomForestClassifier(random_state=0)
-            randomForest.fit(X_train, y_train)
-            predict_train = randomForest.predict(X_train)
-            predict_test = randomForest.predict(X_test)
+                randomForest = RandomForestClassifier(max_depth = depth,n_estimators = estimators, random_state=0)
+                randomForest.fit(X_train, y_train)
+                predict_train = randomForest.predict(X_train)
+                predict_test = randomForest.predict(X_test)
+                accuracy_train = accuracy_score(predict_train,y_train)
+                accuracy_test = accuracy_score(predict_test,y_test)
+                f1_train = f1_score(predict_train,y_train,average='macro')
+                f1_test = f1_score(predict_test,y_test,average='macro')
 
-            print("\nTrain Accuracy:{}".format(accuracy_score(predict_train,y_train)))
-            print("Test Accuracy:{}".format(accuracy_score(predict_test,y_test)))
+                print("\nFOLD:{:0}, DEPTH:{:0}, ESTIMATORS:{:0}  \nTrain Accuracy:{:.2%} | Test Accuracy:{:.2%}".format(fold_id,depth,estimators,accuracy_train,accuracy_test))
+                print("Train F1:{0:.2%} | Test F1:{1:.2%}".format(f1_train,f1_test))
+                # misclassifications = pd.DataFrame(y_test)
+                # misclassifications['predicted'] = predict_test
+                # print("Test misclassifications: \n{}".format(misclassifications[y_test != predict_test]))
 
-            #data_to_model.insert(1,'randomforest',randomForest.predict(model_x))
-            # log_count = 0
-            # for id,value in enumerate(data_to_model['randomforest']):
-            #         #Plot the outliers
-            #         if(value != data_to_model['log_status'][id]):
-            #             log_key = data_to_model.index[id]
-            #             log_count += 1
-            #             Visualize_SimpleTemperatureCharts(log_collection[log_key],'Temperature Chart - '+ log_key.replace(".csv",''))
-            #             print('Ploting Isolation Forest Outliers {}/{}. Log Id {}'.format( log_count,len(data_to_model[value != data_to_model['log_status']]),log_key.replace(".csv",'') ))
-                        
-            #             plt.show()
-            
-            cmatrix = confusion_matrix(y_test,predict_test)
-            disp = ConfusionMatrixDisplay(cmatrix, display_labels=randomForest.classes_)
-            disp.plot()
+                #fold_scores = pd.DataFrame([],columns= ['depth','fold','train accuracy','test accuracy','train f1','test f1'])
+                fold_scores.append([depth,estimators,fold_id,accuracy_train,accuracy_test,f1_train,f1_test])
+                if(accuracy_test > best_score):
+                    best_score = accuracy_test
+                    best_fold = fold_id
+                    best_model = deepcopy(randomForest) 
+                    cmatrix = confusion_matrix(y_test,predict_test)
+                    disp = ConfusionMatrixDisplay(cmatrix, display_labels=randomForest.classes_)
+        
+        #Shows best_score confusion matrix
+        disp.plot()
         plt.show()
+
+        #Plots the training and test error over the variation
+        col_to_group = 'Tree Max Depth'
+        fold_scores = pd.DataFrame(fold_scores,columns= ['Tree Max Depth','Estimators','fold','train accuracy','test accuracy','train f1','test f1'])
+        max_accuracy_ids = fold_scores.groupby([col_to_group])['test accuracy'].idxmax()
+        max_accuracy_grouped = fold_scores.loc[max_accuracy_ids]
+        plot(max_depths,1-max_accuracy_grouped['train accuracy']); plot(max_depths,1-max_accuracy_grouped['test accuracy'])
+        plt.title('Random Forest Training');plt.legend(['Train Error','Test Error'])
+        plt.xlabel(col_to_group);plt.ylabel('Error')
+        plt.show()
+
+        #Re evaluate the best model
+        y = best_model.predict(model_x)
+        accuracy = accuracy_score(y,model_y)
+        f1 = f1_score(y,model_y,average='macro')
+        
+        print("\n\nBEST MODEL  \nAccuracy:{:.2%}".format(accuracy))
+        print("F1:{:.2%}".format(f1))
+        
+        #Store the predicted values on file
+        data_to_model.insert(1,'predicted','none')
+        data_to_model['predicted'].loc[model_x.index] = y
 
 
     data_to_model.to_csv("model_output.csv")
