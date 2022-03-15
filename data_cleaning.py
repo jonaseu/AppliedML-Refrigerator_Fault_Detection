@@ -6,8 +6,6 @@ from sklearn.decomposition import PCA
 from sklearn.neural_network import MLPRegressor
 from sklearn.metrics import classification_report,confusion_matrix,accuracy_score, classification_report,ConfusionMatrixDisplay,f1_score
 from copy import deepcopy
-from sklearn.tree import export_graphviz
-from subprocess import call
 from sklearn.model_selection import RepeatedStratifiedKFold
 import pandas as pd
 import glob
@@ -797,18 +795,18 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
         model_x = pd.DataFrame(data_to_model.drop(['log_status','log_status_numeric'],1))
         
         RANDOM_STATE = 0
-        skf = RepeatedStratifiedKFold(n_splits=5,n_repeats=5,random_state=RANDOM_STATE)
+        skf = RepeatedStratifiedKFold(n_splits=5,n_repeats=3,random_state=RANDOM_STATE)
         skf.get_n_splits(model_x, model_y)
 
         #Chooses between optimizing number of tree estimators or max depth
         HYPERPARAMETER_TO_OPTIMIZE = 'Estimator' #'Estimator' or 'Tree Max Depth'
         RANGE_TO_OPTIMIZE = {   
-                                'Estimator': np.array( np.arange(10,150,1).tolist()),
+                                'Estimator': np.array( np.arange(10,80,1).tolist()),
                                 'Tree Max Depth':np.array( np.arange(2,15,1).tolist())
                             }
         #Initial values of the hyperparameters to Tune, when optimizing one, the others are constant
         depth = 3
-        estimator = 150
+        estimator = 80
 
         best_score,best_model_id,model_id = 0,0,0
         fold_scores = []
@@ -831,27 +829,26 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
                 randomForest.fit(X_train, y_train)
                 predict_train = randomForest.predict(X_train)
                 predict_test = randomForest.predict(X_test)
-                accuracy_train = accuracy_score(predict_train,y_train)
-                accuracy_test = accuracy_score(predict_test,y_test)
-                f1_train = f1_score(predict_train,y_train,average='macro')
-                f1_test = f1_score(predict_test,y_test,average='macro')
+                accuracy_train = accuracy_score(y_train,predict_train)
+                accuracy_test = accuracy_score(y_test,predict_test)
+                f1_train = f1_score(y_train,predict_train,average='macro')
+                f1_test = f1_score(y_test,predict_test,average='macro')
 
                 print("\nMODEL {:0} FOLD:{:0}, DEPTH:{:0}, ESTIMATORS:{:0}  \nTrain Accuracy:{:.2%} | Test Accuracy:{:.2%}".format(model_id,fold_id,depth,estimator,accuracy_train,accuracy_test))
                 print("Train F1:{0:.2%} | Test F1:{1:.2%}".format(f1_train,f1_test))
 
                 #If model had the best result, update best model ids
                 fold_scores.append([model_id,depth,estimator,fold_id,accuracy_train,accuracy_test,f1_train,f1_test])
-                if(accuracy_test > best_score):
-                    best_score = accuracy_test
+                if(f1_test > best_score):
+                    best_score = f1_test
                     best_model_id = model_id
-                    best_model = deepcopy(randomForest) 
-                    cmatrix = confusion_matrix(y_test,predict_test)
-                    disp = ConfusionMatrixDisplay(cmatrix, display_labels=randomForest.classes_)
+                    best_model = deepcopy(randomForest)
+                    best_X_test,best_y_test = X_test,y_test
 
         #Plots the training and test error over the variation
         fold_scores = pd.DataFrame(fold_scores,columns= ['Model Id','Tree Max Depth','Estimator','fold','train accuracy','test accuracy','train f1','test f1'])
         fold_grouped_scores = fold_scores.groupby(HYPERPARAMETER_TO_OPTIMIZE).agg(['mean', 'std'])
-        #fold_scores.to_csv('kfold_eval.csv')
+        fold_scores.to_csv('kfold_eval.csv')
         print(fold_grouped_scores)
         
         #Plot the evaluation of the model trought iterations
@@ -875,20 +872,22 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
         plt.show()
 
         #Re evaluate the best model
-        y = best_model.predict(model_x)
-        accuracy = accuracy_score(y,model_y)
-        f1 = f1_score(y,model_y,average='macro')
+        y = best_model.predict(best_X_test)
+        accuracy = accuracy_score(best_y_test,y)
+        f1 = f1_score(best_y_test,y,average='macro')
         
         print("\n\nBEST WAS MODEL {:0}  \nAccuracy:{:.2%}".format(best_model_id,accuracy))
         print("F1:{:.2%}".format(f1))
 
         #Shows best_score confusion matrix
+        cmatrix = confusion_matrix(best_y_test,y)
+        disp = ConfusionMatrixDisplay(cmatrix, display_labels=randomForest.classes_)
         disp.plot()
         plt.show()
         
         #Store the predicted values on file
         data_to_model.insert(1,'predicted','none')
-        data_to_model['predicted'].loc[model_x.index] = y
+        data_to_model['predicted'].loc[best_X_test.index] = y
 
 
     data_to_model.to_csv("model_output.csv")
