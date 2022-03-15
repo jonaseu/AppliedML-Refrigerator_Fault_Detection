@@ -796,18 +796,24 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
         model_y = data_to_model['log_status']
         model_x = pd.DataFrame(data_to_model.drop(['log_status','log_status_numeric'],1))
         
-        RANDOM_STATE = 1
+        RANDOM_STATE = 0
         skf = RepeatedStratifiedKFold(n_splits=5,n_repeats=5,random_state=RANDOM_STATE)
         skf.get_n_splits(model_x, model_y)
 
-        max_depths = [i for i in range(1,10)]
-        estimators = 1000
-        estimators = np.array( np.arange(10,201,5).tolist())
-
+        #Chooses between optimizing number of tree estimators or max depth
+        HYPERPARAMETER_TO_OPTIMIZE = 'Estimator' #'Estimator' or 'Tree Max Depth'
+        RANGE_TO_OPTIMIZE = {   
+                                'Estimator': np.array( np.arange(10,150,1).tolist()),
+                                'Tree Max Depth':np.array( np.arange(2,15,1).tolist())
+                            }
+        #Initial values of the hyperparameters to Tune, when optimizing one, the others are constant
         depth = 3
+        estimator = 150
+
         best_score,best_model_id,model_id = 0,0,0
         fold_scores = []
-        for estimator in estimators:
+        range_to_optimize = RANGE_TO_OPTIMIZE[HYPERPARAMETER_TO_OPTIMIZE]
+        for hyperparameter_value in range_to_optimize:
             fold_id = 0
             for train_index, test_index in skf.split(model_x, model_y):
                 fold_id += 1
@@ -815,6 +821,12 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
                 X_train, X_test = model_x.iloc[train_index], model_x.iloc[test_index]
                 y_train, y_test = model_y.iloc[train_index], model_y.iloc[test_index]
 
+                if(HYPERPARAMETER_TO_OPTIMIZE == 'Estimator'):
+                    estimator = hyperparameter_value
+                else:
+                    depth = hyperparameter_value
+
+                #Generate Random forest and evaluate its performance
                 randomForest = RandomForestClassifier(max_depth = depth,n_estimators = estimator,random_state=RANDOM_STATE)
                 randomForest.fit(X_train, y_train)
                 predict_train = randomForest.predict(X_train)
@@ -826,10 +838,8 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
 
                 print("\nMODEL {:0} FOLD:{:0}, DEPTH:{:0}, ESTIMATORS:{:0}  \nTrain Accuracy:{:.2%} | Test Accuracy:{:.2%}".format(model_id,fold_id,depth,estimator,accuracy_train,accuracy_test))
                 print("Train F1:{0:.2%} | Test F1:{1:.2%}".format(f1_train,f1_test))
-                # misclassifications = pd.DataFrame(y_test)
-                # misclassifications['predicted'] = predict_test
-                # print("Test misclassifications: \n{}".format(misclassifications[y_test != predict_test]))
 
+                #If model had the best result, update best model ids
                 fold_scores.append([model_id,depth,estimator,fold_id,accuracy_train,accuracy_test,f1_train,f1_test])
                 if(accuracy_test > best_score):
                     best_score = accuracy_test
@@ -839,9 +849,8 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
                     disp = ConfusionMatrixDisplay(cmatrix, display_labels=randomForest.classes_)
 
         #Plots the training and test error over the variation
-        col_to_group = 'Estimators'
-        fold_scores = pd.DataFrame(fold_scores,columns= ['Model Id','Tree Max Depth','Estimators','fold','train accuracy','test accuracy','train f1','test f1'])
-        fold_grouped_scores = fold_scores.groupby(col_to_group).agg(['mean', 'std'])
+        fold_scores = pd.DataFrame(fold_scores,columns= ['Model Id','Tree Max Depth','Estimator','fold','train accuracy','test accuracy','train f1','test f1'])
+        fold_grouped_scores = fold_scores.groupby(HYPERPARAMETER_TO_OPTIMIZE).agg(['mean', 'std'])
         #fold_scores.to_csv('kfold_eval.csv')
         print(fold_grouped_scores)
         
@@ -852,17 +861,17 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
         desired_color = TRAIN_COLOR
         group_accuracy = 1-fold_grouped_scores['train accuracy']['mean']
         group_std = fold_grouped_scores['train accuracy']['std']
-        plt.plot(estimators,group_accuracy,'k-',color=desired_color)
-        plt.fill_between(estimators, (group_accuracy - group_std), (group_accuracy + group_std), color=desired_color, alpha=0.1)
+        plt.plot(range_to_optimize,group_accuracy,'k-',color=desired_color)
+        plt.fill_between(range_to_optimize, (group_accuracy - group_std), (group_accuracy + group_std), color=desired_color, alpha=0.1)
         
         desired_color = TEST_COLOR
         group_accuracy = 1-fold_grouped_scores['test accuracy']['mean']
         group_std = fold_grouped_scores['test accuracy']['std']
-        plt.plot(estimators,group_accuracy,'k-',color=desired_color)
-        plt.fill_between(estimators, (group_accuracy - group_std), (group_accuracy + group_std), color=desired_color, alpha=0.1)
+        plt.plot(range_to_optimize,group_accuracy,'k-',color=desired_color)
+        plt.fill_between(range_to_optimize, (group_accuracy - group_std), (group_accuracy + group_std), color=desired_color, alpha=0.1)
 
         plt.title('Random Forest Training');plt.legend(['Train Error','Train Deviation','Test Error','Test Deviation'])
-        plt.xlabel(col_to_group);plt.ylabel('Error')
+        plt.xlabel(HYPERPARAMETER_TO_OPTIMIZE);plt.ylabel('Error')
         plt.show()
 
         #Re evaluate the best model
