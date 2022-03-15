@@ -8,10 +8,11 @@ from sklearn.metrics import classification_report,confusion_matrix,accuracy_scor
 from copy import deepcopy
 from sklearn.tree import export_graphviz
 from subprocess import call
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import RepeatedStratifiedKFold
 import pandas as pd
 import glob
 import matplotlib.pylab as plt
+from sklearn.utils import shuffle
 from statsmodels.graphics.tsaplots import plot_acf,acf
 import scipy.signal as ss
 from collections import Counter
@@ -661,6 +662,10 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
     model_outputs = model_outputs[model_outputs['log_usage'] != 'Fault']
     model_outputs = model_outputs[model_outputs['log_status'] != 'load']
     model_outputs['log_status'].replace('pulldown defrost','pulldown',inplace=True)
+    #In Case want to change the logic to classify damper faults uncommment this section
+    #model_outputs = model_outputs[(model_outputs['log_status'] == 'fault damper pantry') | (model_outputs['log_usage'] == 'Good')]
+    #model_outputs['log_status'] = model_outputs['log_usage']
+    print(model_outputs['log_status'].value_counts())
     del model_outputs['log_usage']
 
     databases_merged = model_outputs.join(model_inputs)
@@ -791,22 +796,26 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
         model_y = data_to_model['log_status']
         model_x = pd.DataFrame(data_to_model.drop(['log_status','log_status_numeric'],1))
         
-        skf = StratifiedKFold(n_splits=5)
+        RANDOM_STATE = 1
+        skf = RepeatedStratifiedKFold(n_splits=5,n_repeats=5,random_state=RANDOM_STATE)
         skf.get_n_splits(model_x, model_y)
 
         max_depths = [i for i in range(1,10)]
         estimators = 1000
+        estimators = np.array( np.arange(10,201,5).tolist())
+
         depth = 3
-        best_score = 0
+        best_score,best_model_id,model_id = 0,0,0
         fold_scores = []
-        for depth in max_depths:
+        for estimator in estimators:
             fold_id = 0
             for train_index, test_index in skf.split(model_x, model_y):
                 fold_id += 1
+                model_id += 1
                 X_train, X_test = model_x.iloc[train_index], model_x.iloc[test_index]
                 y_train, y_test = model_y.iloc[train_index], model_y.iloc[test_index]
 
-                randomForest = RandomForestClassifier(max_depth = depth,n_estimators = estimators, random_state=0)
+                randomForest = RandomForestClassifier(max_depth = depth,n_estimators = estimator,random_state=RANDOM_STATE)
                 randomForest.fit(X_train, y_train)
                 predict_train = randomForest.predict(X_train)
                 predict_test = randomForest.predict(X_test)
@@ -815,32 +824,44 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
                 f1_train = f1_score(predict_train,y_train,average='macro')
                 f1_test = f1_score(predict_test,y_test,average='macro')
 
-                print("\nFOLD:{:0}, DEPTH:{:0}, ESTIMATORS:{:0}  \nTrain Accuracy:{:.2%} | Test Accuracy:{:.2%}".format(fold_id,depth,estimators,accuracy_train,accuracy_test))
+                print("\nMODEL {:0} FOLD:{:0}, DEPTH:{:0}, ESTIMATORS:{:0}  \nTrain Accuracy:{:.2%} | Test Accuracy:{:.2%}".format(model_id,fold_id,depth,estimator,accuracy_train,accuracy_test))
                 print("Train F1:{0:.2%} | Test F1:{1:.2%}".format(f1_train,f1_test))
                 # misclassifications = pd.DataFrame(y_test)
                 # misclassifications['predicted'] = predict_test
                 # print("Test misclassifications: \n{}".format(misclassifications[y_test != predict_test]))
 
-                #fold_scores = pd.DataFrame([],columns= ['depth','fold','train accuracy','test accuracy','train f1','test f1'])
-                fold_scores.append([depth,estimators,fold_id,accuracy_train,accuracy_test,f1_train,f1_test])
+                fold_scores.append([model_id,depth,estimator,fold_id,accuracy_train,accuracy_test,f1_train,f1_test])
                 if(accuracy_test > best_score):
                     best_score = accuracy_test
-                    best_fold = fold_id
+                    best_model_id = model_id
                     best_model = deepcopy(randomForest) 
                     cmatrix = confusion_matrix(y_test,predict_test)
                     disp = ConfusionMatrixDisplay(cmatrix, display_labels=randomForest.classes_)
-        
-        #Shows best_score confusion matrix
-        disp.plot()
-        plt.show()
 
         #Plots the training and test error over the variation
-        col_to_group = 'Tree Max Depth'
-        fold_scores = pd.DataFrame(fold_scores,columns= ['Tree Max Depth','Estimators','fold','train accuracy','test accuracy','train f1','test f1'])
-        max_accuracy_ids = fold_scores.groupby([col_to_group])['test accuracy'].idxmax()
-        max_accuracy_grouped = fold_scores.loc[max_accuracy_ids]
-        plot(max_depths,1-max_accuracy_grouped['train accuracy']); plot(max_depths,1-max_accuracy_grouped['test accuracy'])
-        plt.title('Random Forest Training');plt.legend(['Train Error','Test Error'])
+        col_to_group = 'Estimators'
+        fold_scores = pd.DataFrame(fold_scores,columns= ['Model Id','Tree Max Depth','Estimators','fold','train accuracy','test accuracy','train f1','test f1'])
+        fold_grouped_scores = fold_scores.groupby(col_to_group).agg(['mean', 'std'])
+        #fold_scores.to_csv('kfold_eval.csv')
+        print(fold_grouped_scores)
+        
+        #Plot the evaluation of the model trought iterations
+        TRAIN_COLOR = 'blue'
+        TEST_COLOR = 'yellow'
+
+        desired_color = TRAIN_COLOR
+        group_accuracy = 1-fold_grouped_scores['train accuracy']['mean']
+        group_std = fold_grouped_scores['train accuracy']['std']
+        plt.plot(estimators,group_accuracy,'k-',color=desired_color)
+        plt.fill_between(estimators, (group_accuracy - group_std), (group_accuracy + group_std), color=desired_color, alpha=0.1)
+        
+        desired_color = TEST_COLOR
+        group_accuracy = 1-fold_grouped_scores['test accuracy']['mean']
+        group_std = fold_grouped_scores['test accuracy']['std']
+        plt.plot(estimators,group_accuracy,'k-',color=desired_color)
+        plt.fill_between(estimators, (group_accuracy - group_std), (group_accuracy + group_std), color=desired_color, alpha=0.1)
+
+        plt.title('Random Forest Training');plt.legend(['Train Error','Train Deviation','Test Error','Test Deviation'])
         plt.xlabel(col_to_group);plt.ylabel('Error')
         plt.show()
 
@@ -849,8 +870,12 @@ def CreateMLModel(desired_model = PARAMETERS['ML_MODELS']['ML_MODEL']):
         accuracy = accuracy_score(y,model_y)
         f1 = f1_score(y,model_y,average='macro')
         
-        print("\n\nBEST MODEL  \nAccuracy:{:.2%}".format(accuracy))
+        print("\n\nBEST WAS MODEL {:0}  \nAccuracy:{:.2%}".format(best_model_id,accuracy))
         print("F1:{:.2%}".format(f1))
+
+        #Shows best_score confusion matrix
+        disp.plot()
+        plt.show()
         
         #Store the predicted values on file
         data_to_model.insert(1,'predicted','none')
