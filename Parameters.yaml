@@ -65,6 +65,11 @@ FEATURE_EXTRACTION:
 
 
 ML_MODELS:
+    #The type of log to use as a model classification
+        #FAULTY_NON_FAULTY = If a log is normal OR has a damper fault
+        #COOLING_TEST = The different types of Cooling Tests, like pulldown, steady state, door openings and so on
+    TYPE_LOGS_TO_USE: 'COOLING_TEST'
+
     #IFOREST, KMEANS, NN or DBSCAN
     ML_MODEL: 'RANDOMFOREST'
 
@@ -76,3 +81,15 @@ ML_MODELS:
 
     #StandardScaler or MinMaxScaler
     DATA_SCALER: 'StandardScaler'
+
+    #Recommended 3 for FAULTY_NON_FAULTY
+    NUMBER_K_FOLD: 1
+
+    #Recommended 3 for FAULTY_NON_FAULTY
+    NUMBER_K_FOLD_REPEATS: 1
+
+    #Recommended 45 for FAULTY_NON_FAULTY
+    RANDOM_FOREST_TREES: 45
+
+    #Recommended 4 for FAULTY_NON_FAULTY
+    RANDOM_FOREST_MAX_DEPTH: 4
