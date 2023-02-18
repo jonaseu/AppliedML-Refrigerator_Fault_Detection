@@ -7,14 +7,36 @@ import seaborn as sns
 import math
 import random 
 
+def RefriPlot_PlotTemperature(log,title = ""):
+    """
+    This function plots the preprocessed temperature data.
+    
+    Parameters:
+    log (pandas DataFrame): Preprocessed log data
+    title (str, optional): Title of the plot. Default is "".
+    
+    Returns:
+    None
+    """
+    fig = plt.figure(figsize=(12, 4))
+    if (title != ""): fig.suptitle(title)
 
-def RefriPlot_PlotPreprocessedLog(log,title = ""):
+    # Plot Main Temperature chart
+    temp_cols = log.columns[2:]
+    plt.plot(log['test time (m)'],log[temp_cols],label=temp_cols)
+    plt.legend(loc='best')
+    plt.ylabel('Temperature [°C]')
+    plt.xlabel('Time [min]')
+    
+    plt.show()
+
+
+def RefriPlot_PlotCorrelationAndBoxPlot(log,title = ""):
     """
     This function plots the preprocessed log data.
-    The plot consists of 3 subplots:
-        1. Main temperature chart that displays the temperature trends of all columns (except first two that should be time)
-        2. Heatmap of the correlation matrix of the temperature data
-        3. Box plot of the temperature data
+    The plot consists of 2 subplots:
+        1. Heatmap of the correlation matrix of the temperature data
+        2. Box plot of the temperature data
     
     Parameters:
     log (pandas DataFrame): Preprocessed log data
@@ -24,19 +46,11 @@ def RefriPlot_PlotPreprocessedLog(log,title = ""):
     None
     """
     
-    fig = plt.figure(figsize=(12, 8))
+    fig = plt.figure(figsize=(12, 4))
     if (title != ""): fig.suptitle(title)
-    gs = fig.add_gridspec(2,2)
-    ax1 = fig.add_subplot(gs[0, :])
-    ax2 = fig.add_subplot(gs[1, 0])
-    ax3 = fig.add_subplot(gs[1, 1])
-
-    # Plot Main Temperature chart
-    temp_cols = log.columns[2:]
-    ax1.plot(log['test time (m)'],log[temp_cols],label=temp_cols)
-    ax1.legend(loc='best')
-    ax1.set_ylabel('Temperature [°C]')
-    ax1.set_xlabel('Time [min]')
+    gs = fig.add_gridspec(1,2)
+    ax2 = fig.add_subplot(gs[0, 0])
+    ax3 = fig.add_subplot(gs[0, 1])
 
     # Plot correlation matrix 
     temperature_data = log.iloc[:, 2:]
