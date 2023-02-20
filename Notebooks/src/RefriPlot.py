@@ -7,7 +7,7 @@ import seaborn as sns
 import math
 import random 
 
-def RefriPlot_PlotTemperature(log,title = ""):
+def RefriPlot_PlotTemperature(log,title = "",fig_size=(12,4)):
     """
     This function plots the preprocessed temperature data.
     
@@ -18,16 +18,18 @@ def RefriPlot_PlotTemperature(log,title = ""):
     Returns:
     None
     """
-    fig = plt.figure(figsize=(12, 4))
+    fig = plt.figure(figsize=fig_size)
     if (title != ""): fig.suptitle(title)
 
     # Plot Main Temperature chart
     temp_cols = log.columns[2:]
     plt.plot(log['test time (m)'],log[temp_cols],label=temp_cols)
-    plt.legend(loc='best')
+    if(fig_size[0] >= 6):
+        plt.legend(loc='best') #Only plot legend if the chart is large enough
     plt.ylabel('Temperature [°C]')
     plt.xlabel('Time [min]')
     
+    plt.tight_layout()
     plt.show()
 
 
