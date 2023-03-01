@@ -92,7 +92,7 @@ venv/Scripts/activate.bat
 
 Finally, when engaged on that venv, you can install all the necessary libraries in advance by:
 ```console
-python venv -m venv
+pip install -r requirements.txt
 ```
 
 
